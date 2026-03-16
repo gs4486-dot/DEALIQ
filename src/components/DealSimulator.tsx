@@ -98,7 +98,8 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
-      <h2 className="text-[22px] font-semibold text-foreground mb-6">Deal Simulator</h2>
+      <h2 className="text-[32px] font-bold text-foreground mb-1">Deal Simulator</h2>
+      <p className="text-muted-foreground text-sm mb-8">Simulate any M&A transaction between two US public companies</p>
 
       {/* Input Section */}
       <div className="bg-card border border-border rounded-xl shadow-card p-6 mb-8">
@@ -195,7 +196,7 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
                     ["Revenue Growth", results.acquirerData.revenueGrowth, results.targetData.revenueGrowth],
                     ["EBITDA Margin", results.acquirerData.ebitdaMargin, results.targetData.ebitdaMargin],
                   ].map(([metric, acq, tgt], i) => (
-                    <tr key={i} className={i >= 2 ? "" : ""}>
+                    <tr key={i}>
                       <td className="font-medium text-foreground">{metric}</td>
                       <td className="num">{acq}</td>
                       <td className="num font-medium">{tgt}</td>

@@ -24,6 +24,10 @@ export default {
         foreground: "hsl(var(--foreground))",
         "secondary-bg": "hsl(var(--secondary-bg))",
         "accent-bg": "hsl(var(--accent-bg))",
+        hero: {
+          DEFAULT: "hsl(var(--hero-bg))",
+          muted: "hsl(var(--hero-muted))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
