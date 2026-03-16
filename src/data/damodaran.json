@@ -1,0 +1,32 @@
+{
+  "_comment": "Source: Damodaran Online, NYU Stern School of Business. Fields: industry name, unlevered beta, equity risk premium (%), implied cost of equity (%). Update periodically from https://pages.stern.nyu.edu/~adamodar/",
+  "industries": [
+    { "industry": "Software (System & Application)", "beta": 1.28, "erp": 5.5, "costOfEquity": 11.54 },
+    { "industry": "Software (Internet)", "beta": 1.42, "erp": 5.5, "costOfEquity": 12.31 },
+    { "industry": "Healthcare Products", "beta": 1.11, "erp": 5.5, "costOfEquity": 10.61 },
+    { "industry": "Pharmaceuticals", "beta": 1.03, "erp": 5.5, "costOfEquity": 10.17 },
+    { "industry": "Biotechnology", "beta": 1.45, "erp": 5.5, "costOfEquity": 12.48 },
+    { "industry": "Banks (Regional)", "beta": 0.56, "erp": 5.5, "costOfEquity": 7.58 },
+    { "industry": "Banks (Money Center)", "beta": 0.85, "erp": 5.5, "costOfEquity": 9.18 },
+    { "industry": "Financial Services (Non-bank & Insurance)", "beta": 0.78, "erp": 5.5, "costOfEquity": 8.79 },
+    { "industry": "Insurance (General)", "beta": 0.72, "erp": 5.5, "costOfEquity": 8.46 },
+    { "industry": "Retail (General)", "beta": 0.95, "erp": 5.5, "costOfEquity": 9.73 },
+    { "industry": "Retail (Online)", "beta": 1.36, "erp": 5.5, "costOfEquity": 11.98 },
+    { "industry": "Oil/Gas (Production & Exploration)", "beta": 1.15, "erp": 5.5, "costOfEquity": 10.83 },
+    { "industry": "Oil/Gas (Integrated)", "beta": 0.92, "erp": 5.5, "costOfEquity": 9.56 },
+    { "industry": "Semiconductor", "beta": 1.37, "erp": 5.5, "costOfEquity": 12.04 },
+    { "industry": "Semiconductor Equipment", "beta": 1.47, "erp": 5.5, "costOfEquity": 12.59 },
+    { "industry": "Telecom (Wireless)", "beta": 0.68, "erp": 5.5, "costOfEquity": 8.24 },
+    { "industry": "Entertainment", "beta": 1.18, "erp": 5.5, "costOfEquity": 10.99 },
+    { "industry": "Media", "beta": 1.01, "erp": 5.5, "costOfEquity": 10.06 },
+    { "industry": "Aerospace/Defense", "beta": 1.07, "erp": 5.5, "costOfEquity": 10.39 },
+    { "industry": "Auto & Truck", "beta": 1.12, "erp": 5.5, "costOfEquity": 10.66 },
+    { "industry": "Chemical (Specialty)", "beta": 1.09, "erp": 5.5, "costOfEquity": 10.50 },
+    { "industry": "Electrical Equipment", "beta": 1.19, "erp": 5.5, "costOfEquity": 11.05 },
+    { "industry": "Food Processing", "beta": 0.68, "erp": 5.5, "costOfEquity": 8.24 },
+    { "industry": "Hospitality/Hotel", "beta": 0.93, "erp": 5.5, "costOfEquity": 9.62 },
+    { "industry": "Real Estate (General/Diversified)", "beta": 0.75, "erp": 5.5, "costOfEquity": 8.63 },
+    { "industry": "Transportation", "beta": 0.89, "erp": 5.5, "costOfEquity": 9.40 },
+    { "industry": "Utility (General)", "beta": 0.35, "erp": 5.5, "costOfEquity": 6.43 }
+  ]
+}
