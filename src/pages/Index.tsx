@@ -1,12 +1,39 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import Navigation from "@/components/Navigation";
+import LandingPage from "@/components/LandingPage";
+import DealSimulator from "@/components/DealSimulator";
+import DealTracker from "@/components/DealTracker";
+import CompsEngine from "@/components/CompsEngine";
+
+export type ViewMode = "ib-analyst" | "pe-associate";
+export type TabId = "landing" | "simulator" | "tracker" | "comps";
 
 const Index = () => {
+  const [activeTab, setActiveTab] = useState<TabId>("landing");
+  const [viewMode, setViewMode] = useState<ViewMode>("ib-analyst");
+  const [simulatorPrefill, setSimulatorPrefill] = useState<{ acquirer: string; target: string } | null>(null);
+
+  const handleSimulateDeal = (acquirer: string, target: string) => {
+    setSimulatorPrefill({ acquirer, target });
+    setActiveTab("simulator");
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      {activeTab !== "landing" && (
+        <Navigation
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+        />
+      )}
+      {activeTab === "landing" && <LandingPage onNavigate={setActiveTab} />}
+      {activeTab === "simulator" && (
+        <DealSimulator viewMode={viewMode} prefill={simulatorPrefill} onClearPrefill={() => setSimulatorPrefill(null)} />
+      )}
+      {activeTab === "tracker" && <DealTracker onSimulateDeal={handleSimulateDeal} />}
+      {activeTab === "comps" && <CompsEngine viewMode={viewMode} />}
     </div>
   );
 };
