@@ -15,11 +15,11 @@ const tabs: { id: TabId; label: string }[] = [
 
 const Navigation = ({ activeTab, onTabChange, viewMode, onViewModeChange }: NavigationProps) => {
   return (
-    <nav className="sticky top-0 z-50 bg-background border-b border-border">
+    <nav className="sticky top-0 z-50 bg-background border-b border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-14">
         <button
           onClick={() => onTabChange("landing")}
-          className="text-xl font-bold text-primary tracking-tight"
+          className="text-2xl font-extrabold text-primary tracking-tight"
         >
           DEALIQ
         </button>
@@ -29,10 +29,10 @@ const Navigation = ({ activeTab, onTabChange, viewMode, onViewModeChange }: Navi
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`px-4 py-4 text-sm font-medium transition-colors relative ${
+              className={`px-4 py-4 text-sm transition-colors relative ${
                 activeTab === tab.id
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "text-primary font-bold"
+                  : "text-muted-foreground font-medium hover:text-foreground"
               }`}
             >
               {tab.label}
