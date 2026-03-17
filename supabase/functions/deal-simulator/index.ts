@@ -19,44 +19,59 @@ interface CompanyData {
   revenueGrowth: number | null;
 }
 
-async function fetchFMPData(ticker: string, fmpKey: string): Promise<CompanyData> {
-  const base = "https://financialmodelingprep.com/api/v3";
-  const [profileRes, metricsRes, ratiosRes, growthRes] = await Promise.all([
-    fetch(`${base}/profile/${ticker}?apikey=${fmpKey}`),
-    fetch(`${base}/key-metrics/${ticker}?limit=1&apikey=${fmpKey}`),
-    fetch(`${base}/ratios/${ticker}?limit=1&apikey=${fmpKey}`),
-    fetch(`${base}/financial-growth/${ticker}?limit=2&apikey=${fmpKey}`),
-  ]);
+async function fetchAlphaVantageData(ticker: string, avKey: string): Promise<CompanyData> {
+  const url = `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${ticker}&apikey=${avKey}`;
+  const res = await fetch(url);
+  const text = await res.text();
 
-  const [profText, metText, ratText, groText] = await Promise.all([
-    profileRes.text(), metricsRes.text(), ratiosRes.text(), growthRes.text(),
-  ]);
+  let data: any;
+  try { data = JSON.parse(text); } catch {
+    console.error("AV non-JSON:", text.substring(0, 200));
+    throw new Error(`Alpha Vantage error for ${ticker}`);
+  }
 
-  const safeParse = (t: string) => { try { return JSON.parse(t); } catch { console.error("FMP parse error:", t.substring(0, 200)); return []; } };
+  if (data["Error Message"]) {
+    throw new Error(`AV error: ${data["Error Message"]}`);
+  }
+  if (data["Note"]) {
+    throw new Error(`AV rate limit: ${data["Note"]}`);
+  }
+  if (data["Information"]) {
+    throw new Error(`AV info: ${data["Information"]}`);
+  }
 
-  const profile = safeParse(profText);
-  const metrics = safeParse(metText);
-  const ratios = safeParse(ratText);
-  const growth = safeParse(groText);
+  console.log(`AV response keys for ${ticker}:`, Object.keys(data).join(", "), "| first values:", JSON.stringify(data).substring(0, 300));
 
-  const p = Array.isArray(profile) ? profile[0] : profile;
-  const m = Array.isArray(metrics) ? metrics[0] : metrics;
-  const r = Array.isArray(ratios) ? ratios[0] : ratios;
-  const g = Array.isArray(growth) ? growth : [];
+  if (!data["Symbol"]) {
+    throw new Error(`No data found for ${ticker}. Response: ${JSON.stringify(data).substring(0, 200)}`);
+  }
 
-  const revenueGrowth = g.length > 1 ? g[1]?.revenueGrowth : g[0]?.revenueGrowth;
+  const parseNum = (v: string | undefined) => {
+    if (!v || v === "None" || v === "-") return null;
+    const n = parseFloat(v);
+    return isNaN(n) ? null : n;
+  };
+
+  const marketCap = parseNum(data["MarketCapitalization"]);
+  const ebitda = parseNum(data["EBITDA"]);
+  const revenue = parseNum(data["RevenueTTM"]);
+  const ev = marketCap; // AV doesn't provide EV directly; approximate
+  const evToEBITDA = (ev && ebitda && ebitda > 0) ? ev / ebitda : null;
+  const evToSales = (ev && revenue && revenue > 0) ? ev / revenue : null;
+  const ebitdaMargin = (ebitda && revenue && revenue > 0) ? ebitda / revenue : null;
+  const revenueGrowth = parseNum(data["QuarterlyRevenueGrowthYOY"]);
 
   return {
-    companyName: p?.companyName ?? ticker,
-    symbol: p?.symbol ?? ticker,
-    sector: p?.sector ?? "N/A",
-    marketCap: m?.marketCap ?? p?.mktCap ?? null,
-    enterpriseValue: m?.enterpriseValue ?? null,
-    evToSales: m?.evToSales ?? null,
-    evToEBITDA: m?.evToEBITDA ?? null,
-    ebitdaMargin: r?.ebitdaMargin ?? null,
-    priceToEarningsRatio: r?.priceToEarningsRatio ?? null,
-    revenueGrowth: revenueGrowth ?? null,
+    companyName: data["Name"] || ticker,
+    symbol: data["Symbol"] || ticker,
+    sector: data["Sector"] || "N/A",
+    marketCap,
+    enterpriseValue: ev,
+    evToSales,
+    evToEBITDA,
+    ebitdaMargin,
+    priceToEarningsRatio: parseNum(data["TrailingPE"]),
+    revenueGrowth,
   };
 }
 
@@ -92,11 +107,11 @@ serve(async (req) => {
       });
     }
 
-    const FMP_KEY = Deno.env.get("FMP_API_KEY");
+    const AV_KEY = Deno.env.get("ALPHA_VANTAGE_API_KEY");
     const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
-    if (!FMP_KEY) {
-      return new Response(JSON.stringify({ error: "FMP_API_KEY not configured" }), {
+    if (!AV_KEY) {
+      return new Response(JSON.stringify({ error: "ALPHA_VANTAGE_API_KEY not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -106,10 +121,9 @@ serve(async (req) => {
       });
     }
 
-    const [acquirerData, targetData] = await Promise.all([
-      fetchFMPData(acquirerTicker, FMP_KEY),
-      fetchFMPData(targetTicker, FMP_KEY),
-    ]);
+    // Fetch sequentially to avoid AV rate limits (5 req/min on free tier)
+    const acquirerData = await fetchAlphaVantageData(acquirerTicker, AV_KEY);
+    const targetData = await fetchAlphaVantageData(targetTicker, AV_KEY);
 
     const fmt = (d: CompanyData) => ({
       name: d.companyName,
@@ -132,12 +146,14 @@ Acquirer: ${acquirerData.companyName} (${acquirerData.symbol})
 - Market Cap: ${formatNumber(acquirerData.marketCap)}, EV: ${formatNumber(acquirerData.enterpriseValue)}
 - EV/EBITDA: ${formatMultiple(acquirerData.evToEBITDA)}, EV/Revenue: ${formatMultiple(acquirerData.evToSales)}
 - Revenue Growth: ${formatPercent(acquirerData.revenueGrowth)}, EBITDA Margin: ${formatPercent(acquirerData.ebitdaMargin)}
+- P/E: ${formatMultiple(acquirerData.priceToEarningsRatio)}
 
 Target: ${targetData.companyName} (${targetData.symbol})
 - Sector: ${targetData.sector}
 - Market Cap: ${formatNumber(targetData.marketCap)}, EV: ${formatNumber(targetData.enterpriseValue)}
 - EV/EBITDA: ${formatMultiple(targetData.evToEBITDA)}, EV/Revenue: ${formatMultiple(targetData.evToSales)}
 - Revenue Growth: ${formatPercent(targetData.revenueGrowth)}, EBITDA Margin: ${formatPercent(targetData.ebitdaMargin)}
+- P/E: ${formatMultiple(targetData.priceToEarningsRatio)}
 
 Deal Structure: ${dealStructure || "all-cash"}
 `.trim();
