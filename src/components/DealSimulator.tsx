@@ -135,7 +135,7 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
 
       {/* Results */}
       {results && !isAnalyzing && (
-        <div className="space-y-8">
+        <div className="space-y-10">
           {/* Section A: Deal Overview */}
           <section>
             <h3 className="text-lg font-semibold text-foreground mb-4">A. Deal Overview</h3>

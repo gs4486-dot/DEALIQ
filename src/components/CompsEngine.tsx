@@ -199,7 +199,7 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
       )}
 
       {results && !isLoading && (
-        <div className="space-y-8">
+        <div className="space-y-10">
           {/* Section A: Comparable Companies Table */}
           <section>
             <h3 className="text-lg font-semibold text-foreground mb-4">A. Comparable Companies</h3>

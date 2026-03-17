@@ -39,9 +39,9 @@ const DealTracker = ({ onSimulateDeal }: DealTrackerProps) => {
   });
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-5xl mx-auto px-6 py-10">
       <h2 className="text-[32px] font-bold text-foreground mb-1">Deal Tracker</h2>
-      <p className="text-muted-foreground text-sm mb-8">Live M&A transactions above $1B across US public markets</p>
+      <p className="text-muted-foreground text-sm mb-10">Announced M&A transactions above $1B across US public markets</p>
 
       {/* Search Bar */}
       <div className="relative mb-4">
