@@ -126,7 +126,7 @@ serve(async (req) => {
         system: "You are a senior equity research analyst. Identify comparable publicly traded US companies for valuation analysis.",
         messages: [{
           role: "user",
-          content: `Identify 8-10 comparable US public companies for ${ticker}${sector ? ` in the ${sector} sector` : ""}${revenueRange && revenueRange !== "Any" ? ` with revenue ${revenueRange}` : ""}.
+          content: `Identify 2-3 of the most comparable US public companies for ${ticker}${sector ? ` in the ${sector} sector` : ""}${revenueRange && revenueRange !== "Any" ? ` with revenue ${revenueRange}` : ""}.
 
 Return ONLY a JSON object with no markdown:
 {"tickers": ["TICK1", "TICK2", ...], "rationale": "3-4 sentence explanation of why these peers were selected."}
