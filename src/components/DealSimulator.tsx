@@ -23,9 +23,6 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
     if (prefill) {
       setAcquirer(prefill.acquirer);
       setTarget(prefill.target);
-      // When prefilled from deal tracker, use name as ticker fallback
-      setAcquirerTicker(prefill.acquirer);
-      setTargetTicker(prefill.target);
       onClearPrefill();
     }
   }, [prefill, onClearPrefill]);
