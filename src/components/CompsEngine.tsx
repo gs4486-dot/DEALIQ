@@ -3,7 +3,6 @@ import { Search, Loader2 } from "lucide-react";
 import type { ViewMode } from "@/pages/Index";
 import AISection from "@/components/AISection";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import CompanyAutocomplete from "@/components/CompanyAutocomplete";
 import damodaranData from "@/data/damodaran.json";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
