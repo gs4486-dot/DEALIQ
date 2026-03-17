@@ -119,7 +119,7 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
   ) || damodaranData.industries[0];
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-5xl mx-auto px-6 py-10">
       <h2 className="text-[32px] font-bold text-foreground mb-1">Comps Engine</h2>
       <p className="text-muted-foreground text-sm mb-10">Generate comparable peer sets with live trading multiples</p>
 
