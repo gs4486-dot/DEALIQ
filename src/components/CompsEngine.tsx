@@ -126,14 +126,18 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
       {/* Input */}
       <div className="bg-card border border-border rounded-xl shadow-card p-6 mb-8">
         <div className="mb-4">
-          <CompanyAutocomplete
-            value={company}
-            onChange={setCompany}
-            onTickerSelect={setTicker}
-            placeholder="Enter company name or ticker"
-            icon={<Search className="w-4 h-4" />}
-            label="Company"
-          />
+          <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Company</label>
+          <div className="relative">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"><Search className="w-4 h-4" /></div>
+            <input
+              type="text"
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value)}
+              placeholder="Enter ticker symbol"
+              className="w-full h-[42px] pl-10 pr-4 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Enter ticker symbol (e.g. MSFT, AAPL, CRM)</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
