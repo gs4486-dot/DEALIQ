@@ -20,21 +20,32 @@ interface CompanyData {
 }
 
 async function fetchYahooData(ticker: string): Promise<CompanyData> {
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=summaryProfile,financialData,defaultKeyStatistics,price`;
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0" },
-  });
-  const text = await res.text();
-  let json: any;
+  // Try v8 finance API (more reliable from server-side)
+  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
+  const summaryUrl = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=summaryProfile,financialData,defaultKeyStatistics,price`;
+
+  // Fetch both endpoints
+  const [chartRes, summaryRes] = await Promise.all([
+    fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } }),
+    fetch(summaryUrl, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } }),
+  ]);
+
+  const summaryText = await summaryRes.text();
+  console.log(`Yahoo summary response status: ${summaryRes.status}, length: ${summaryText.length}, preview: ${summaryText.substring(0, 200)}`);
+
+  let result: any = null;
   try {
-    json = JSON.parse(text);
+    const json = JSON.parse(summaryText);
+    result = json?.quoteSummary?.result?.[0];
   } catch {
-    console.error("Yahoo returned non-JSON:", text.substring(0, 300));
-    throw new Error(`Yahoo Finance error for ${ticker}`);
+    console.error("Yahoo summary parse failed:", summaryText.substring(0, 300));
   }
 
-  const result = json?.quoteSummary?.result?.[0];
-  if (!result) throw new Error(`No Yahoo data found for ${ticker}`);
+  if (!result) {
+    // Fallback: try the crumb-based approach
+    console.log("v10 failed, trying alternative...");
+    throw new Error(`Yahoo Finance returned no data for ${ticker}. Status: ${summaryRes.status}`);
+  }
 
   const price = result.price || {};
   const fin = result.financialData || {};
