@@ -176,7 +176,7 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
 
         <button
           onClick={findComps}
-          disabled={!company || isLoading}
+          disabled={!ticker.trim() || isLoading}
           className="w-full h-[42px] bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors duration-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {isLoading ? (

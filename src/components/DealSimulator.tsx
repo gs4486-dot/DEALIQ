@@ -65,22 +65,34 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
       {/* Input Section */}
       <div className="bg-card border border-border rounded-xl shadow-card p-6 mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <CompanyAutocomplete
-            value={acquirer}
-            onChange={setAcquirer}
-            onTickerSelect={setAcquirerTicker}
-            placeholder="Enter company name or ticker"
-            icon={<Building2 className="w-4 h-4" />}
-            label="Acquirer"
-          />
-          <CompanyAutocomplete
-            value={target}
-            onChange={setTarget}
-            onTickerSelect={setTargetTicker}
-            placeholder="Enter company name or ticker"
-            icon={<Crosshair className="w-4 h-4" />}
-            label="Target"
-          />
+          <div>
+            <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Acquirer</label>
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"><Building2 className="w-4 h-4" /></div>
+              <input
+                type="text"
+                value={acquirer}
+                onChange={(e) => setAcquirer(e.target.value)}
+                placeholder="Enter ticker symbol"
+                className="w-full h-[42px] pl-10 pr-4 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Enter ticker symbol (e.g. MSFT, AAPL, CRM)</p>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Target</label>
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"><Crosshair className="w-4 h-4" /></div>
+              <input
+                type="text"
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                placeholder="Enter ticker symbol"
+                className="w-full h-[42px] pl-10 pr-4 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Enter ticker symbol (e.g. MSFT, AAPL, CRM)</p>
+          </div>
         </div>
 
         <div className="mb-4">
