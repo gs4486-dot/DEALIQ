@@ -20,27 +20,41 @@ interface CompanyData {
   revenueGrowth: number | null;
 }
 
+function safeParse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    console.error("FMP returned non-JSON:", text.substring(0, 200));
+    throw new Error(`FMP API error: ${text.substring(0, 100)}`);
+  }
+}
+
 async function fetchFMPData(ticker: string, fmpKey: string): Promise<CompanyData> {
+  const base = "https://financialmodelingprep.com";
   const [profileRes, metricsRes, ratiosRes, growthRes] = await Promise.all([
-    fetch(`https://financialmodelingprep.com/stable/profile?symbol=${ticker}&apikey=${fmpKey}`),
-    fetch(`https://financialmodelingprep.com/stable/key-metrics?symbol=${ticker}&limit=1&apikey=${fmpKey}`),
-    fetch(`https://financialmodelingprep.com/stable/ratios?symbol=${ticker}&limit=1&apikey=${fmpKey}`),
-    fetch(`https://financialmodelingprep.com/stable/financial-growth?symbol=${ticker}&limit=2&apikey=${fmpKey}`),
+    fetch(`${base}/api/v3/profile/${ticker}?apikey=${fmpKey}`),
+    fetch(`${base}/api/v3/key-metrics/${ticker}?limit=1&apikey=${fmpKey}`),
+    fetch(`${base}/api/v3/ratios/${ticker}?limit=1&apikey=${fmpKey}`),
+    fetch(`${base}/api/v3/financial-growth/${ticker}?limit=2&apikey=${fmpKey}`),
   ]);
 
-  const [profile, metrics, ratios, growth] = await Promise.all([
-    profileRes.json(),
-    metricsRes.json(),
-    ratiosRes.json(),
-    growthRes.json(),
+  const [profileText, metricsText, ratiosText, growthText] = await Promise.all([
+    profileRes.text(),
+    metricsRes.text(),
+    ratiosRes.text(),
+    growthRes.text(),
   ]);
+
+  const profile = safeParse(profileText) as any[];
+  const metrics = safeParse(metricsText) as any[];
+  const ratios = safeParse(ratiosText) as any[];
+  const growth = safeParse(growthText) as any[];
 
   const p = Array.isArray(profile) ? profile[0] : profile;
   const m = Array.isArray(metrics) ? metrics[0] : metrics;
   const r = Array.isArray(ratios) ? ratios[0] : ratios;
   const g = Array.isArray(growth) ? growth : [];
 
-  // Use index 1 (prior year) for revenue growth if available, else index 0
   const revenueGrowth = g.length > 1 ? g[1]?.revenueGrowth : g[0]?.revenueGrowth;
 
   return {
