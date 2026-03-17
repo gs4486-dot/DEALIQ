@@ -3,6 +3,9 @@ import { Building2, Crosshair, Loader2, AlertTriangle } from "lucide-react";
 import type { ViewMode } from "@/pages/Index";
 import AISection from "@/components/AISection";
 import SkeletonBlock from "@/components/SkeletonBlock";
+import CompanyAutocomplete from "@/components/CompanyAutocomplete";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface DealSimulatorProps {
   viewMode: ViewMode;
@@ -10,22 +13,11 @@ interface DealSimulatorProps {
   onClearPrefill: () => void;
 }
 
-// Mock data for demo purposes
-// TODO: Replace with FMP API calls using FMP_API_KEY
-const mockCompanyData = (name: string, isTarget: boolean) => ({
-  name: name || "Company",
-  ticker: name?.toUpperCase().slice(0, 4) || "TICK",
-  marketCap: isTarget ? "$42.8B" : "$185.2B",
-  ev: isTarget ? "$48.1B" : "$192.7B",
-  evEbitda: isTarget ? "14.2x" : "18.7x",
-  evRevenue: isTarget ? "5.8x" : "7.2x",
-  revenueGrowth: isTarget ? "12.4%" : "8.1%",
-  ebitdaMargin: isTarget ? "40.8%" : "38.5%",
-});
-
 const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps) => {
   const [acquirer, setAcquirer] = useState("");
+  const [acquirerTicker, setAcquirerTicker] = useState("");
   const [target, setTarget] = useState("");
+  const [targetTicker, setTargetTicker] = useState("");
   const [dealStructure, setDealStructure] = useState("all-cash");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
@@ -34,67 +26,42 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
     if (prefill) {
       setAcquirer(prefill.acquirer);
       setTarget(prefill.target);
+      // When prefilled from deal tracker, use name as ticker fallback
+      setAcquirerTicker(prefill.acquirer);
+      setTargetTicker(prefill.target);
       onClearPrefill();
     }
   }, [prefill, onClearPrefill]);
 
   const runAnalysis = async () => {
-    if (!acquirer || !target) return;
+    if (!acquirerTicker || !targetTicker) {
+      toast.error("Please select both companies from the dropdown");
+      return;
+    }
     setIsAnalyzing(true);
     setResults(null);
 
-    // Simulate API delay
-    // TODO: Wire to FMP API for financial data and Claude API (ANTHROPIC_API_KEY) for AI sections
-    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      const { data, error } = await supabase.functions.invoke("deal-simulator", {
+        body: {
+          acquirerTicker,
+          targetTicker,
+          dealStructure,
+          viewMode,
+        },
+      });
 
-    setResults({
-      acquirerData: mockCompanyData(acquirer, false),
-      targetData: mockCompanyData(target, true),
-    });
-    setIsAnalyzing(false);
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setResults(data);
+    } catch (e: any) {
+      console.error("Deal analysis error:", e);
+      toast.error(e.message || "Failed to run deal analysis. Check your API keys.");
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
-
-  const toneLabel = viewMode === "ib-analyst" ? "IB Analyst" : "PE Associate";
-
-  // AI content adapts to viewMode
-  // TODO: System prompt injection point — adapt tone based on viewMode toggle
-  const strategicRationale =
-    viewMode === "ib-analyst"
-      ? `The proposed acquisition of ${target || "Target"} by ${acquirer || "Acquirer"} represents a compelling strategic combination that would create a market leader with enhanced scale and product diversification. The transaction offers significant revenue synergy potential through cross-selling opportunities across complementary customer bases. The combined entity would benefit from improved competitive positioning in a rapidly consolidating market landscape. Management teams have expressed alignment on long-term strategic vision and operational integration priorities.`
-      : `From an investment perspective, the acquisition of ${target || "Target"} presents an attractive entry point at current valuation multiples. The target's strong EBITDA margins and recurring revenue profile provide downside protection while offering meaningful upside through operational improvements. The deal structure supports a leveraged return profile consistent with mid-market buyout parameters. Key value creation levers include margin expansion through procurement optimization and accelerated organic growth via the acquirer's distribution capabilities.`;
-
-  const synergies =
-    viewMode === "ib-analyst"
-      ? {
-          items: [
-            `Cost synergies of approximately $280–340M annually through elimination of redundant corporate overhead and procurement optimization`,
-            `Revenue synergies of $150–200M from cross-selling into ${acquirer || "Acquirer"}'s enterprise customer base within 24 months`,
-            `Technology integration savings of $60–80M through platform consolidation and shared R&D infrastructure`,
-          ],
-          risks: [
-            `Customer overlap in the mid-market segment could result in 8–12% revenue attrition during integration`,
-            `Cultural integration risks given differing organizational structures and compensation frameworks`,
-            `Regulatory review timeline may extend to 9–12 months given combined market share in key verticals`,
-          ],
-        }
-      : {
-          items: [
-            `Run-rate EBITDA enhancement of $300–380M achievable by Year 3 through headcount rationalization and vendor consolidation`,
-            `Revenue uplift of $120–180M via pricing optimization and expansion into adjacent verticals leveraging combined capabilities`,
-            `Working capital improvements of $40–60M through inventory management optimization and payment term renegotiation`,
-          ],
-          risks: [
-            `Integration execution risk — management bandwidth constraints during first 18 months post-close`,
-            `Key person retention critical for top 15 revenue-generating relationships at target`,
-            `Leverage profile at close requires disciplined deleveraging trajectory to maintain covenant compliance`,
-          ],
-        };
-
-  const riskFlags = [
-    `${target || "Target"}'s customer concentration: top 3 clients represent 34% of revenue, creating single-point-of-failure risk`,
-    `Acquirer's current leverage ratio of 3.2x EBITDA limits debt capacity for the transaction without equity co-investment`,
-    `Declining gross margins at target (down 180bps YoY) suggest competitive pricing pressure that may persist post-acquisition`,
-  ];
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
@@ -104,32 +71,22 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
       {/* Input Section */}
       <div className="bg-card border border-border rounded-xl shadow-card p-6 mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Acquirer</label>
-            <div className="relative">
-              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type="text"
-                value={acquirer}
-                onChange={(e) => setAcquirer(e.target.value)}
-                placeholder="Enter company name or ticker"
-                className="w-full h-[42px] pl-10 pr-4 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Target</label>
-            <div className="relative">
-              <Crosshair className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type="text"
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                placeholder="Enter company name or ticker"
-                className="w-full h-[42px] pl-10 pr-4 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
-              />
-            </div>
-          </div>
+          <CompanyAutocomplete
+            value={acquirer}
+            onChange={setAcquirer}
+            onTickerSelect={setAcquirerTicker}
+            placeholder="Enter company name or ticker"
+            icon={<Building2 className="w-4 h-4" />}
+            label="Acquirer"
+          />
+          <CompanyAutocomplete
+            value={target}
+            onChange={setTarget}
+            onTickerSelect={setTargetTicker}
+            placeholder="Enter company name or ticker"
+            icon={<Crosshair className="w-4 h-4" />}
+            label="Target"
+          />
         </div>
 
         <div className="mb-4">
@@ -187,29 +144,37 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
                 </thead>
                 <tbody>
                   {[
-                    ["Company Name", results.acquirerData.name, results.targetData.name],
-                    ["Ticker", results.acquirerData.ticker, results.targetData.ticker],
-                    ["Market Cap", results.acquirerData.marketCap, results.targetData.marketCap],
-                    ["Enterprise Value", results.acquirerData.ev, results.targetData.ev],
-                    ["EV/EBITDA", results.acquirerData.evEbitda, results.targetData.evEbitda],
-                    ["EV/Revenue", results.acquirerData.evRevenue, results.targetData.evRevenue],
-                    ["Revenue Growth", results.acquirerData.revenueGrowth, results.targetData.revenueGrowth],
-                    ["EBITDA Margin", results.acquirerData.ebitdaMargin, results.targetData.ebitdaMargin],
+                    ["Company Name", results.acquirerData?.name, results.targetData?.name],
+                    ["Ticker", results.acquirerData?.ticker, results.targetData?.ticker],
+                    ["Market Cap", results.acquirerData?.marketCap, results.targetData?.marketCap],
+                    ["Enterprise Value", results.acquirerData?.ev, results.targetData?.ev],
+                    ["EV/EBITDA", results.acquirerData?.evEbitda, results.targetData?.evEbitda],
+                    ["EV/Revenue", results.acquirerData?.evRevenue, results.targetData?.evRevenue],
+                    ["Revenue Growth", results.acquirerData?.revenueGrowth, results.targetData?.revenueGrowth],
+                    ["EBITDA Margin", results.acquirerData?.ebitdaMargin, results.targetData?.ebitdaMargin],
                   ].map(([metric, acq, tgt], i) => (
                     <tr key={i}>
                       <td className="font-medium text-foreground">{metric}</td>
-                      <td className="num">{acq}</td>
-                      <td className="num font-medium">{tgt}</td>
+                      <td className="num">{acq || "N/A"}</td>
+                      <td className="num font-medium">{tgt || "N/A"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {/* Inline warning for missing data */}
+            {(Object.values(results.acquirerData || {}).includes("N/A") ||
+              Object.values(results.targetData || {}).includes("N/A")) && (
+              <p className="text-xs text-destructive mt-2 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                Some financial data unavailable for this company. Analysis may be limited.
+              </p>
+            )}
           </section>
 
           <hr className="border-border" />
 
-          {/* Section B: Implied Valuation */}
+          {/* Section B: Implied Valuation (still using derived estimates) */}
           <section>
             <h3 className="text-lg font-semibold text-foreground mb-4">B. Implied Valuation</h3>
             <div className="data-table">
@@ -224,18 +189,18 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
                 <tbody>
                   <tr>
                     <td className="font-medium text-foreground">Low (25th %ile)</td>
-                    <td className="num">$38.2B</td>
-                    <td className="num">$142.50</td>
+                    <td className="num">{results.targetData?.ev || "N/A"}</td>
+                    <td className="num">—</td>
                   </tr>
                   <tr>
                     <td className="font-medium text-foreground">Mid (Median)</td>
-                    <td className="num">$48.1B</td>
-                    <td className="num">$179.25</td>
+                    <td className="num">{results.targetData?.ev || "N/A"}</td>
+                    <td className="num">—</td>
                   </tr>
                   <tr>
                     <td className="font-medium text-foreground">High (75th %ile)</td>
-                    <td className="num">$58.4B</td>
-                    <td className="num">$217.80</td>
+                    <td className="num">{results.targetData?.ev || "N/A"}</td>
+                    <td className="num">—</td>
                   </tr>
                 </tbody>
               </table>
@@ -247,8 +212,7 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
           {/* Section C: Strategic Rationale */}
           <section>
             <h3 className="text-lg font-semibold text-foreground mb-4">C. Strategic Rationale</h3>
-            {/* TODO: System prompt for Claude API injected here. Tone: {toneLabel}. Key: ANTHROPIC_API_KEY */}
-            <AISection label="Strategic Rationale" content={strategicRationale} />
+            <AISection label="Strategic Rationale" content={results.rationale || "Analysis unavailable."} />
           </section>
 
           <hr className="border-border" />
@@ -259,7 +223,7 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <AISection label="Estimated Synergies">
                 <ul className="space-y-2">
-                  {synergies.items.map((item, i) => (
+                  {(results.synergies || []).map((item: string, i: number) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-foreground">
                       <span className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 shrink-0" />
                       {item}
@@ -269,7 +233,7 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
               </AISection>
               <AISection label="Key Integration Risks">
                 <ul className="space-y-2">
-                  {synergies.risks.map((item, i) => (
+                  {(results.integrationRisks || []).map((item: string, i: number) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-foreground">
                       <span className="w-1.5 h-1.5 rounded-full bg-destructive mt-1.5 shrink-0" />
                       {item}
@@ -287,7 +251,7 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
             <h3 className="text-lg font-semibold text-foreground mb-4">E. Key Risk Flags</h3>
             <AISection label="Risk Flags">
               <ul className="space-y-3">
-                {riskFlags.map((flag, i) => (
+                {(results.riskFlags || []).map((flag: string, i: number) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-foreground">
                     <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
                     {flag}
