@@ -35,49 +35,57 @@ function fmtPct(val: number | null): string {
   return `${(val * 100).toFixed(1)}%`;
 }
 
-async function fetchPeerData(ticker: string, fmpKey: string): Promise<PeerData | null> {
+async function fetchPeerData(ticker: string, avKey: string): Promise<PeerData | null> {
   try {
-    const base = "https://financialmodelingprep.com/api/v3";
-    const [profileRes, metricsRes, ratiosRes, growthRes] = await Promise.all([
-      fetch(`${base}/profile/${ticker}?apikey=${fmpKey}`),
-      fetch(`${base}/key-metrics/${ticker}?limit=1&apikey=${fmpKey}`),
-      fetch(`${base}/ratios/${ticker}?limit=1&apikey=${fmpKey}`),
-      fetch(`${base}/financial-growth/${ticker}?limit=2&apikey=${fmpKey}`),
-    ]);
+    const url = `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${ticker}&apikey=${avKey}`;
+    const res = await fetch(url);
+    const text = await res.text();
+    let data: any;
+    try { data = JSON.parse(text); } catch { return null; }
 
-    const [profText, metText, ratText, groText] = await Promise.all([
-      profileRes.text(), metricsRes.text(), ratiosRes.text(), growthRes.text(),
-    ]);
+    if (!data["Symbol"] || data["Error Message"] || data["Note"]) return null;
 
-    const safeParse = (t: string) => { try { return JSON.parse(t); } catch { return []; } };
-    const profile = safeParse(profText);
-    const metrics = safeParse(metText);
-    const ratios = safeParse(ratText);
-    const growth = safeParse(groText);
+    const parseNum = (v: string | undefined) => {
+      if (!v || v === "None" || v === "-") return null;
+      const n = parseFloat(v);
+      return isNaN(n) ? null : n;
+    };
 
-    const p = Array.isArray(profile) ? profile[0] : profile;
-    const m = Array.isArray(metrics) ? metrics[0] : metrics;
-    const r = Array.isArray(ratios) ? ratios[0] : ratios;
-    const g = Array.isArray(growth) ? growth : [];
-
-    if (!p?.companyName) return null;
-
-    const revenueGrowth = g.length > 1 ? g[1]?.revenueGrowth : g[0]?.revenueGrowth;
+    const marketCap = parseNum(data["MarketCapitalization"]);
+    const ebitda = parseNum(data["EBITDA"]);
+    const revenue = parseNum(data["RevenueTTM"]);
+    const ev = marketCap;
+    const evToEBITDA = (ev && ebitda && ebitda > 0) ? ev / ebitda : null;
+    const evToSales = (ev && revenue && revenue > 0) ? ev / revenue : null;
+    const ebitdaMargin = (ebitda && revenue && revenue > 0) ? ebitda / revenue : null;
+    const revenueGrowth = parseNum(data["QuarterlyRevenueGrowthYOY"]);
 
     return {
-      company: p.companyName,
-      ticker: p.symbol,
-      evEbitda: fmt(m?.evToEBITDA),
-      evRevenue: fmt(m?.evToSales),
-      pe: fmt(r?.priceToEarningsRatio),
+      company: data["Name"] || ticker,
+      ticker: data["Symbol"] || ticker,
+      evEbitda: fmt(evToEBITDA),
+      evRevenue: fmt(evToSales),
+      pe: fmt(parseNum(data["TrailingPE"])),
       revGrowth: fmtPct(revenueGrowth),
-      ebitdaMargin: fmtPct(r?.ebitdaMargin),
-      marketCap: formatNumber(m?.marketCap ?? p?.mktCap),
+      ebitdaMargin: fmtPct(ebitdaMargin),
+      marketCap: formatNumber(marketCap),
     };
   } catch (e) {
     console.error(`Error fetching data for ${ticker}:`, e);
     return null;
   }
+}
+
+// Fetch peers sequentially with delay to respect AV rate limits (5 req/min free tier)
+async function fetchPeersSequentially(tickers: string[], avKey: string): Promise<PeerData[]> {
+  const results: PeerData[] = [];
+  for (const ticker of tickers) {
+    const data = await fetchPeerData(ticker, avKey);
+    if (data) results.push(data);
+    // Small delay between requests
+    await new Promise(r => setTimeout(r, 1200));
+  }
+  return results;
 }
 
 serve(async (req) => {
@@ -94,16 +102,16 @@ serve(async (req) => {
       });
     }
 
-    const FMP_KEY = Deno.env.get("FMP_API_KEY");
+    const AV_KEY = Deno.env.get("ALPHA_VANTAGE_API_KEY");
     const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
-    if (!FMP_KEY || !ANTHROPIC_KEY) {
+    if (!AV_KEY || !ANTHROPIC_KEY) {
       return new Response(JSON.stringify({ error: "API keys not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const targetData = await fetchPeerData(ticker, FMP_KEY);
+    const targetData = await fetchPeerData(ticker, AV_KEY);
 
     const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -151,10 +159,8 @@ Focus on sector alignment, similar business models, and comparable revenue scale
       });
     }
 
-    const peerResults = await Promise.all(
-      peerTickers.map((t: string) => fetchPeerData(t, FMP_KEY))
-    );
-    const peers = peerResults.filter((p): p is PeerData => p !== null);
+    // Fetch peers sequentially to respect rate limits
+    const peers = await fetchPeersSequentially(peerTickers, AV_KEY);
 
     return new Response(
       JSON.stringify({ target: targetData, peers, rationale }),
