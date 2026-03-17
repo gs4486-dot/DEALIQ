@@ -3,7 +3,6 @@ import { Search, Loader2 } from "lucide-react";
 import type { ViewMode } from "@/pages/Index";
 import AISection from "@/components/AISection";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import CompanyAutocomplete from "@/components/CompanyAutocomplete";
 import damodaranData from "@/data/damodaran.json";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -79,7 +78,6 @@ function calcStats(peers: PeerData[]) {
 }
 
 const CompsEngine = ({ viewMode }: CompsEngineProps) => {
-  const [company, setCompany] = useState("");
   const [ticker, setTicker] = useState("");
   const [industry, setIndustry] = useState("");
   const [geography, setGeography] = useState("United States");
@@ -88,8 +86,8 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
   const [results, setResults] = useState<{ peers: PeerData[]; rationale: string; target: PeerData | null } | null>(null);
 
   const findComps = async () => {
-    if (!ticker) {
-      toast.error("Please select a company from the dropdown");
+    if (!ticker.trim()) {
+      toast.error("Please enter a ticker symbol");
       return;
     }
     setIsLoading(true);
@@ -97,7 +95,7 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
 
     try {
       const { data, error } = await supabase.functions.invoke("comps-engine", {
-        body: { ticker, sector: industry, revenueRange },
+        body: { ticker: ticker.trim().toUpperCase(), sector: industry, revenueRange },
       });
 
       if (error) throw error;
@@ -128,14 +126,18 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
       {/* Input */}
       <div className="bg-card border border-border rounded-xl shadow-card p-6 mb-8">
         <div className="mb-4">
-          <CompanyAutocomplete
-            value={company}
-            onChange={setCompany}
-            onTickerSelect={setTicker}
-            placeholder="Enter company name or ticker"
-            icon={<Search className="w-4 h-4" />}
-            label="Company"
-          />
+          <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Company</label>
+          <div className="relative">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"><Search className="w-4 h-4" /></div>
+            <input
+              type="text"
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value)}
+              placeholder="Enter ticker symbol"
+              className="w-full h-[42px] pl-10 pr-4 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Enter ticker symbol (e.g. MSFT, AAPL, CRM)</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -174,7 +176,7 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
 
         <button
           onClick={findComps}
-          disabled={!company || isLoading}
+          disabled={!ticker.trim() || isLoading}
           className="w-full h-[42px] bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors duration-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {isLoading ? (
