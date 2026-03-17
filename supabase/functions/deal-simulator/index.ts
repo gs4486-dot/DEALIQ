@@ -19,50 +19,44 @@ interface CompanyData {
   revenueGrowth: number | null;
 }
 
-async function fetchYahooData(ticker: string): Promise<CompanyData> {
-  // Try v8 finance API (more reliable from server-side)
-  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
-  const summaryUrl = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=summaryProfile,financialData,defaultKeyStatistics,price`;
-
-  // Fetch both endpoints
-  const [chartRes, summaryRes] = await Promise.all([
-    fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } }),
-    fetch(summaryUrl, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } }),
+async function fetchFMPData(ticker: string, fmpKey: string): Promise<CompanyData> {
+  const base = "https://financialmodelingprep.com/api/v3";
+  const [profileRes, metricsRes, ratiosRes, growthRes] = await Promise.all([
+    fetch(`${base}/profile/${ticker}?apikey=${fmpKey}`),
+    fetch(`${base}/key-metrics/${ticker}?limit=1&apikey=${fmpKey}`),
+    fetch(`${base}/ratios/${ticker}?limit=1&apikey=${fmpKey}`),
+    fetch(`${base}/financial-growth/${ticker}?limit=2&apikey=${fmpKey}`),
   ]);
 
-  const summaryText = await summaryRes.text();
-  console.log(`Yahoo summary response status: ${summaryRes.status}, length: ${summaryText.length}, preview: ${summaryText.substring(0, 200)}`);
+  const [profText, metText, ratText, groText] = await Promise.all([
+    profileRes.text(), metricsRes.text(), ratiosRes.text(), growthRes.text(),
+  ]);
 
-  let result: any = null;
-  try {
-    const json = JSON.parse(summaryText);
-    result = json?.quoteSummary?.result?.[0];
-  } catch {
-    console.error("Yahoo summary parse failed:", summaryText.substring(0, 300));
-  }
+  const safeParse = (t: string) => { try { return JSON.parse(t); } catch { console.error("FMP parse error:", t.substring(0, 200)); return []; } };
 
-  if (!result) {
-    // Fallback: try the crumb-based approach
-    console.log("v10 failed, trying alternative...");
-    throw new Error(`Yahoo Finance returned no data for ${ticker}. Status: ${summaryRes.status}`);
-  }
+  const profile = safeParse(profText);
+  const metrics = safeParse(metText);
+  const ratios = safeParse(ratText);
+  const growth = safeParse(groText);
 
-  const price = result.price || {};
-  const fin = result.financialData || {};
-  const stats = result.defaultKeyStatistics || {};
-  const profile = result.summaryProfile || {};
+  const p = Array.isArray(profile) ? profile[0] : profile;
+  const m = Array.isArray(metrics) ? metrics[0] : metrics;
+  const r = Array.isArray(ratios) ? ratios[0] : ratios;
+  const g = Array.isArray(growth) ? growth : [];
+
+  const revenueGrowth = g.length > 1 ? g[1]?.revenueGrowth : g[0]?.revenueGrowth;
 
   return {
-    companyName: price.shortName || price.longName || ticker,
-    symbol: price.symbol || ticker,
-    sector: profile.sector || "N/A",
-    marketCap: price.marketCap?.raw ?? null,
-    enterpriseValue: stats.enterpriseValue?.raw ?? null,
-    evToSales: stats.enterpriseToRevenue?.raw ?? null,
-    evToEBITDA: stats.enterpriseToEbitda?.raw ?? null,
-    ebitdaMargin: fin.ebitdaMargins?.raw ?? null,
-    priceToEarningsRatio: stats.trailingPE?.raw ?? price.trailingPE?.raw ?? null,
-    revenueGrowth: fin.revenueGrowth?.raw ?? null,
+    companyName: p?.companyName ?? ticker,
+    symbol: p?.symbol ?? ticker,
+    sector: p?.sector ?? "N/A",
+    marketCap: m?.marketCap ?? p?.mktCap ?? null,
+    enterpriseValue: m?.enterpriseValue ?? null,
+    evToSales: m?.evToSales ?? null,
+    evToEBITDA: m?.evToEBITDA ?? null,
+    ebitdaMargin: r?.ebitdaMargin ?? null,
+    priceToEarningsRatio: r?.priceToEarningsRatio ?? null,
+    revenueGrowth: revenueGrowth ?? null,
   };
 }
 
@@ -98,7 +92,14 @@ serve(async (req) => {
       });
     }
 
+    const FMP_KEY = Deno.env.get("FMP_API_KEY");
     const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+
+    if (!FMP_KEY) {
+      return new Response(JSON.stringify({ error: "FMP_API_KEY not configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     if (!ANTHROPIC_KEY) {
       return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -106,8 +107,8 @@ serve(async (req) => {
     }
 
     const [acquirerData, targetData] = await Promise.all([
-      fetchYahooData(acquirerTicker),
-      fetchYahooData(targetTicker),
+      fetchFMPData(acquirerTicker, FMP_KEY),
+      fetchFMPData(targetTicker, FMP_KEY),
     ]);
 
     const fmt = (d: CompanyData) => ({
