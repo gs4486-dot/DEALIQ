@@ -10,7 +10,6 @@ interface CompanyData {
   companyName: string;
   symbol: string;
   sector: string;
-  industry: string;
   marketCap: number | null;
   enterpriseValue: number | null;
   evToSales: number | null;
@@ -20,63 +19,48 @@ interface CompanyData {
   revenueGrowth: number | null;
 }
 
-function safeParse(text: string): unknown {
+async function fetchYahooData(ticker: string): Promise<CompanyData> {
+  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=summaryProfile,financialData,defaultKeyStatistics,price`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0" },
+  });
+  const text = await res.text();
+  let json: any;
   try {
-    return JSON.parse(text);
+    json = JSON.parse(text);
   } catch {
-    console.error("FMP returned non-JSON:", text.substring(0, 200));
-    throw new Error(`FMP API error: ${text.substring(0, 100)}`);
+    console.error("Yahoo returned non-JSON:", text.substring(0, 300));
+    throw new Error(`Yahoo Finance error for ${ticker}`);
   }
-}
 
-async function fetchFMPData(ticker: string, fmpKey: string): Promise<CompanyData> {
-  const [profileRes, metricsRes, ratiosRes, growthRes] = await Promise.all([
-    fetch(`https://financialmodelingprep.com/stable/profile?symbol=${ticker}&apikey=${fmpKey}`),
-    fetch(`https://financialmodelingprep.com/stable/key-metrics?symbol=${ticker}&limit=1&apikey=${fmpKey}`),
-    fetch(`https://financialmodelingprep.com/stable/ratios?symbol=${ticker}&limit=1&apikey=${fmpKey}`),
-    fetch(`https://financialmodelingprep.com/stable/financial-growth?symbol=${ticker}&limit=2&apikey=${fmpKey}`),
-  ]);
+  const result = json?.quoteSummary?.result?.[0];
+  if (!result) throw new Error(`No Yahoo data found for ${ticker}`);
 
-  const [profileText, metricsText, ratiosText, growthText] = await Promise.all([
-    profileRes.text(),
-    metricsRes.text(),
-    ratiosRes.text(),
-    growthRes.text(),
-  ]);
-
-  const profile = safeParse(profileText) as any[];
-  const metrics = safeParse(metricsText) as any[];
-  const ratios = safeParse(ratiosText) as any[];
-  const growth = safeParse(growthText) as any[];
-
-  const p = Array.isArray(profile) ? profile[0] : profile;
-  const m = Array.isArray(metrics) ? metrics[0] : metrics;
-  const r = Array.isArray(ratios) ? ratios[0] : ratios;
-  const g = Array.isArray(growth) ? growth : [];
-
-  const revenueGrowth = g.length > 1 ? g[1]?.revenueGrowth : g[0]?.revenueGrowth;
+  const price = result.price || {};
+  const fin = result.financialData || {};
+  const stats = result.defaultKeyStatistics || {};
+  const profile = result.summaryProfile || {};
 
   return {
-    companyName: p?.companyName ?? ticker,
-    symbol: p?.symbol ?? ticker,
-    sector: p?.sector ?? "N/A",
-    industry: p?.industry ?? "N/A",
-    marketCap: m?.marketCap ?? p?.mktCap ?? null,
-    enterpriseValue: m?.enterpriseValue ?? null,
-    evToSales: m?.evToSales ?? null,
-    evToEBITDA: m?.evToEBITDA ?? null,
-    ebitdaMargin: r?.ebitdaMargin ?? null,
-    priceToEarningsRatio: r?.priceToEarningsRatio ?? null,
-    revenueGrowth: revenueGrowth ?? null,
+    companyName: price.shortName || price.longName || ticker,
+    symbol: price.symbol || ticker,
+    sector: profile.sector || "N/A",
+    marketCap: price.marketCap?.raw ?? null,
+    enterpriseValue: stats.enterpriseValue?.raw ?? null,
+    evToSales: stats.enterpriseToRevenue?.raw ?? null,
+    evToEBITDA: stats.enterpriseToEbitda?.raw ?? null,
+    ebitdaMargin: fin.ebitdaMargins?.raw ?? null,
+    priceToEarningsRatio: stats.trailingPE?.raw ?? price.trailingPE?.raw ?? null,
+    revenueGrowth: fin.revenueGrowth?.raw ?? null,
   };
 }
 
-function formatNumber(val: number | null, prefix = "$", suffix = "", decimals = 1): string {
+function formatNumber(val: number | null): string {
   if (val === null || val === undefined) return "N/A";
-  if (Math.abs(val) >= 1e12) return `${prefix}${(val / 1e12).toFixed(decimals)}T${suffix}`;
-  if (Math.abs(val) >= 1e9) return `${prefix}${(val / 1e9).toFixed(decimals)}B${suffix}`;
-  if (Math.abs(val) >= 1e6) return `${prefix}${(val / 1e6).toFixed(decimals)}M${suffix}`;
-  return `${prefix}${val.toFixed(decimals)}${suffix}`;
+  if (Math.abs(val) >= 1e12) return `$${(val / 1e12).toFixed(1)}T`;
+  if (Math.abs(val) >= 1e9) return `$${(val / 1e9).toFixed(1)}B`;
+  if (Math.abs(val) >= 1e6) return `$${(val / 1e6).toFixed(1)}M`;
+  return `$${val.toFixed(1)}`;
 }
 
 function formatMultiple(val: number | null): string {
@@ -99,66 +83,46 @@ serve(async (req) => {
 
     if (!acquirerTicker || !targetTicker) {
       return new Response(JSON.stringify({ error: "Both acquirerTicker and targetTicker are required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const FMP_KEY = Deno.env.get("FMP_API_KEY");
     const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-
-    if (!FMP_KEY) {
-      return new Response(JSON.stringify({ error: "FMP_API_KEY not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
     if (!ANTHROPIC_KEY) {
       return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Step 1: Fetch FMP data for both companies in parallel
     const [acquirerData, targetData] = await Promise.all([
-      fetchFMPData(acquirerTicker, FMP_KEY),
-      fetchFMPData(targetTicker, FMP_KEY),
+      fetchYahooData(acquirerTicker),
+      fetchYahooData(targetTicker),
     ]);
 
-    // Build formatted data for display
-    const acquirerFormatted = {
-      name: acquirerData.companyName,
-      ticker: acquirerData.symbol,
-      sector: acquirerData.sector,
-      marketCap: formatNumber(acquirerData.marketCap),
-      ev: formatNumber(acquirerData.enterpriseValue),
-      evEbitda: formatMultiple(acquirerData.evToEBITDA),
-      evRevenue: formatMultiple(acquirerData.evToSales),
-      revenueGrowth: formatPercent(acquirerData.revenueGrowth),
-      ebitdaMargin: formatPercent(acquirerData.ebitdaMargin),
-    };
+    const fmt = (d: CompanyData) => ({
+      name: d.companyName,
+      ticker: d.symbol,
+      sector: d.sector,
+      marketCap: formatNumber(d.marketCap),
+      ev: formatNumber(d.enterpriseValue),
+      evEbitda: formatMultiple(d.evToEBITDA),
+      evRevenue: formatMultiple(d.evToSales),
+      revenueGrowth: formatPercent(d.revenueGrowth),
+      ebitdaMargin: formatPercent(d.ebitdaMargin),
+    });
 
-    const targetFormatted = {
-      name: targetData.companyName,
-      ticker: targetData.symbol,
-      sector: targetData.sector,
-      marketCap: formatNumber(targetData.marketCap),
-      ev: formatNumber(targetData.enterpriseValue),
-      evEbitda: formatMultiple(targetData.evToEBITDA),
-      evRevenue: formatMultiple(targetData.evToSales),
-      revenueGrowth: formatPercent(targetData.revenueGrowth),
-      ebitdaMargin: formatPercent(targetData.ebitdaMargin),
-    };
+    const acquirerFormatted = fmt(acquirerData);
+    const targetFormatted = fmt(targetData);
 
-    // Step 2: Build context string for Claude
     const context = `
 Acquirer: ${acquirerData.companyName} (${acquirerData.symbol})
-- Sector: ${acquirerData.sector}, Industry: ${acquirerData.industry}
+- Sector: ${acquirerData.sector}
 - Market Cap: ${formatNumber(acquirerData.marketCap)}, EV: ${formatNumber(acquirerData.enterpriseValue)}
 - EV/EBITDA: ${formatMultiple(acquirerData.evToEBITDA)}, EV/Revenue: ${formatMultiple(acquirerData.evToSales)}
 - Revenue Growth: ${formatPercent(acquirerData.revenueGrowth)}, EBITDA Margin: ${formatPercent(acquirerData.ebitdaMargin)}
 
 Target: ${targetData.companyName} (${targetData.symbol})
-- Sector: ${targetData.sector}, Industry: ${targetData.industry}
+- Sector: ${targetData.sector}
 - Market Cap: ${formatNumber(targetData.marketCap)}, EV: ${formatNumber(targetData.enterpriseValue)}
 - EV/EBITDA: ${formatMultiple(targetData.evToEBITDA)}, EV/Revenue: ${formatMultiple(targetData.evToSales)}
 - Revenue Growth: ${formatPercent(targetData.revenueGrowth)}, EBITDA Margin: ${formatPercent(targetData.ebitdaMargin)}
@@ -166,12 +130,10 @@ Target: ${targetData.companyName} (${targetData.symbol})
 Deal Structure: ${dealStructure || "all-cash"}
 `.trim();
 
-    // System prompt injection point — tone adapts based on viewMode
     const systemPrompt = viewMode === "pe-associate"
       ? "You are a Private Equity Associate at KKR. Write in returns-focused investment committee memo style. Reference actual metrics, focus on EBITDA expansion, leverage, and exit multiple."
       : "You are a Senior M&A Analyst at Goldman Sachs. Write in precise, data-driven Goldman Sachs pitch book style. Reference the actual numbers provided. Be specific and avoid generic language.";
 
-    // Step 3: Three Claude API calls in parallel
     async function callClaude(userPrompt: string): Promise<string> {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -202,35 +164,23 @@ Deal Structure: ${dealStructure || "all-cash"}
       callClaude(`Given these two companies and deal context:\n\n${context}\n\nReturn ONLY a JSON object:\n{"flags": ["flag1", "flag2", "flag3"]}\n\nEach flag should identify one quantitative or structural red flag referencing actual numbers. No markdown, no explanation — just the JSON.`),
     ]);
 
-    // Parse JSON responses safely
-    let synergies = ["Analysis unavailable", "Analysis unavailable", "Analysis unavailable"];
-    let integrationRisks = ["Analysis unavailable", "Analysis unavailable", "Analysis unavailable"];
-    let riskFlags = ["Analysis unavailable", "Analysis unavailable", "Analysis unavailable"];
+    let synergies = ["Analysis unavailable"];
+    let integrationRisks = ["Analysis unavailable"];
+    let riskFlags = ["Analysis unavailable"];
 
     try {
-      const synergiesJson = JSON.parse(synergiesText.replace(/```json?\n?/g, "").replace(/```/g, "").trim());
-      synergies = synergiesJson.synergies || synergies;
-      integrationRisks = synergiesJson.risks || integrationRisks;
-    } catch (e) {
-      console.error("Failed to parse synergies JSON:", e, synergiesText);
-    }
+      const j = JSON.parse(synergiesText.replace(/```json?\n?/g, "").replace(/```/g, "").trim());
+      synergies = j.synergies || synergies;
+      integrationRisks = j.risks || integrationRisks;
+    } catch (e) { console.error("Failed to parse synergies:", e); }
 
     try {
-      const flagsJson = JSON.parse(flagsText.replace(/```json?\n?/g, "").replace(/```/g, "").trim());
-      riskFlags = flagsJson.flags || riskFlags;
-    } catch (e) {
-      console.error("Failed to parse flags JSON:", e, flagsText);
-    }
+      const j = JSON.parse(flagsText.replace(/```json?\n?/g, "").replace(/```/g, "").trim());
+      riskFlags = j.flags || riskFlags;
+    } catch (e) { console.error("Failed to parse flags:", e); }
 
     return new Response(
-      JSON.stringify({
-        acquirerData: acquirerFormatted,
-        targetData: targetFormatted,
-        rationale: rationaleText,
-        synergies,
-        integrationRisks,
-        riskFlags,
-      }),
+      JSON.stringify({ acquirerData: acquirerFormatted, targetData: targetFormatted, rationale: rationaleText, synergies, integrationRisks, riskFlags }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
