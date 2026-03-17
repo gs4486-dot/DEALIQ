@@ -121,8 +121,9 @@ serve(async (req) => {
       });
     }
 
-    // Fetch sequentially to avoid AV rate limits (5 req/min on free tier)
+    // Fetch sequentially with delay to respect AV rate limit (1 req/sec)
     const acquirerData = await fetchAlphaVantageData(acquirerTicker, AV_KEY);
+    await new Promise(r => setTimeout(r, 1200));
     const targetData = await fetchAlphaVantageData(targetTicker, AV_KEY);
 
     const fmt = (d: CompanyData) => ({
