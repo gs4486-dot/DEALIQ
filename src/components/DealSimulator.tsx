@@ -58,7 +58,7 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-5xl mx-auto px-6 py-10">
       <h2 className="text-[32px] font-bold text-foreground mb-1">Deal Simulator</h2>
       <p className="text-muted-foreground text-sm mb-10">Model any M&A transaction between two US public companies</p>
 
