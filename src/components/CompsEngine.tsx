@@ -3,63 +3,122 @@ import { Search, Loader2 } from "lucide-react";
 import type { ViewMode } from "@/pages/Index";
 import AISection from "@/components/AISection";
 import SkeletonBlock from "@/components/SkeletonBlock";
+import CompanyAutocomplete from "@/components/CompanyAutocomplete";
 import damodaranData from "@/data/damodaran.json";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface CompsEngineProps {
   viewMode: ViewMode;
 }
 
-// Mock comparable companies
-// TODO: Claude selects peers via ANTHROPIC_API_KEY, then FMP_API_KEY pulls live multiples
-const mockComps = [
-  { company: "Datadog", ticker: "DDOG", evEbitda: "62.3x", evRevenue: "18.4x", pe: "85.2x", revGrowth: "26.1%", ebitdaMargin: "29.5%", marketCap: "$38.2B" },
-  { company: "CrowdStrike", ticker: "CRWD", evEbitda: "58.7x", evRevenue: "17.1x", pe: "78.4x", revGrowth: "33.4%", ebitdaMargin: "29.1%", marketCap: "$62.1B" },
-  { company: "Zscaler", ticker: "ZS", evEbitda: "71.2x", evRevenue: "19.8x", pe: "94.1x", revGrowth: "34.7%", ebitdaMargin: "27.8%", marketCap: "$27.4B" },
-  { company: "Palo Alto Networks", ticker: "PANW", evEbitda: "45.8x", evRevenue: "12.6x", pe: "52.3x", revGrowth: "19.8%", ebitdaMargin: "27.5%", marketCap: "$105.3B" },
-  { company: "Fortinet", ticker: "FTNT", evEbitda: "35.2x", evRevenue: "10.4x", pe: "42.8x", revGrowth: "18.2%", ebitdaMargin: "29.6%", marketCap: "$55.8B" },
-  { company: "Dynatrace", ticker: "DT", evEbitda: "42.1x", evRevenue: "11.2x", pe: "56.7x", revGrowth: "22.5%", ebitdaMargin: "26.6%", marketCap: "$14.2B" },
-  { company: "Elastic", ticker: "ESTC", evEbitda: "55.4x", evRevenue: "9.8x", pe: "68.9x", revGrowth: "17.6%", ebitdaMargin: "17.7%", marketCap: "$10.8B" },
-  { company: "SentinelOne", ticker: "S", evEbitda: "N/A", evRevenue: "12.1x", pe: "N/A", revGrowth: "40.2%", ebitdaMargin: "-8.2%", marketCap: "$7.5B" },
-  { company: "Splunk", ticker: "SPLK", evEbitda: "38.9x", evRevenue: "7.5x", pe: "48.2x", revGrowth: "14.1%", ebitdaMargin: "19.3%", marketCap: "$22.6B" },
-  { company: "Varonis Systems", ticker: "VRNS", evEbitda: "N/A", evRevenue: "10.8x", pe: "N/A", revGrowth: "28.9%", ebitdaMargin: "-5.4%", marketCap: "$4.8B" },
-];
-
-const summaryStats = {
-  evEbitda: { p25: "38.9x", median: "49.0x", p75: "60.5x" },
-  evRevenue: { p25: "10.1x", median: "11.7x", p75: "17.8x" },
-  pe: { p25: "48.2x", median: "56.7x", p75: "82.8x" },
-  revGrowth: { p25: "18.0%", median: "24.3%", p75: "33.9%" },
-  ebitdaMargin: { p25: "18.5%", median: "27.7%", p75: "29.5%" },
-};
+interface PeerData {
+  company: string;
+  ticker: string;
+  evEbitda: string;
+  evRevenue: string;
+  pe: string;
+  revGrowth: string;
+  ebitdaMargin: string;
+  marketCap: string;
+}
 
 const revenueRanges = ["Any", "Under $100M", "$100M–$500M", "$500M–$2B", "Above $2B"];
 
+function calcStats(peers: PeerData[]) {
+  const parseNum = (s: string) => {
+    const n = parseFloat(s);
+    return isNaN(n) ? null : n;
+  };
+
+  const getPercentiles = (values: number[]) => {
+    if (values.length === 0) return { p25: "N/A", median: "N/A", p75: "N/A" };
+    const sorted = [...values].sort((a, b) => a - b);
+    const q = (p: number) => {
+      const idx = (sorted.length - 1) * p;
+      const lo = Math.floor(idx);
+      const hi = Math.ceil(idx);
+      return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+    };
+    return {
+      p25: `${q(0.25).toFixed(1)}x`,
+      median: `${q(0.5).toFixed(1)}x`,
+      p75: `${q(0.75).toFixed(1)}x`,
+    };
+  };
+
+  const getPercentilesPct = (values: number[]) => {
+    if (values.length === 0) return { p25: "N/A", median: "N/A", p75: "N/A" };
+    const sorted = [...values].sort((a, b) => a - b);
+    const q = (p: number) => {
+      const idx = (sorted.length - 1) * p;
+      const lo = Math.floor(idx);
+      const hi = Math.ceil(idx);
+      return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+    };
+    return {
+      p25: `${q(0.25).toFixed(1)}%`,
+      median: `${q(0.5).toFixed(1)}%`,
+      p75: `${q(0.75).toFixed(1)}%`,
+    };
+  };
+
+  const evEbitdaVals = peers.map(p => parseNum(p.evEbitda)).filter((n): n is number => n !== null);
+  const evRevVals = peers.map(p => parseNum(p.evRevenue)).filter((n): n is number => n !== null);
+  const peVals = peers.map(p => parseNum(p.pe)).filter((n): n is number => n !== null);
+  const rgVals = peers.map(p => parseNum(p.revGrowth)).filter((n): n is number => n !== null);
+  const emVals = peers.map(p => parseNum(p.ebitdaMargin)).filter((n): n is number => n !== null);
+
+  return {
+    evEbitda: getPercentiles(evEbitdaVals),
+    evRevenue: getPercentiles(evRevVals),
+    pe: getPercentiles(peVals),
+    revGrowth: getPercentilesPct(rgVals),
+    ebitdaMargin: getPercentilesPct(emVals),
+  };
+}
+
 const CompsEngine = ({ viewMode }: CompsEngineProps) => {
   const [company, setCompany] = useState("");
+  const [ticker, setTicker] = useState("");
   const [industry, setIndustry] = useState("");
   const [geography, setGeography] = useState("United States");
   const [revenueRange, setRevenueRange] = useState("Any");
   const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState<boolean>(false);
+  const [results, setResults] = useState<{ peers: PeerData[]; rationale: string; target: PeerData | null } | null>(null);
 
   const findComps = async () => {
-    if (!company) return;
+    if (!ticker) {
+      toast.error("Please select a company from the dropdown");
+      return;
+    }
     setIsLoading(true);
-    setResults(false);
-    await new Promise((r) => setTimeout(r, 1800));
-    setResults(true);
-    setIsLoading(false);
+    setResults(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("comps-engine", {
+        body: { ticker, sector: industry, revenueRange },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setResults(data);
+    } catch (e: any) {
+      console.error("Comps engine error:", e);
+      toast.error(e.message || "Failed to find comparables. Check your API keys.");
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  const peers = results?.peers || [];
+  const summaryStats = peers.length > 0 ? calcStats(peers) : null;
 
   // Find matching Damodaran industry
   const matchedIndustry = damodaranData.industries.find(
     (ind) => ind.industry.toLowerCase().includes((industry || "software").toLowerCase())
   ) || damodaranData.industries[0];
-
-  const selectionRationale =
-    viewMode === "ib-analyst"
-      ? `The comparable set was selected based on sector alignment (enterprise cybersecurity and observability software), similar business models (SaaS/subscription-based revenue), and comparable revenue scale ($500M–$5B). The peer group reflects a mix of high-growth pure-play security vendors and established platform companies to capture the full valuation spectrum. Companies with fundamentally different delivery models (hardware-centric or services-heavy) were excluded to maintain comparability.`
-      : `Peers were selected to reflect the investable universe of scaled SaaS security and infrastructure software businesses with recurring revenue profiles. The comp set emphasizes companies with demonstrated paths to profitability and strong net retention metrics, consistent with a growth equity evaluation framework. Outliers in the peer set (SentinelOne, Varonis) are included to represent earlier-stage comparables with higher growth but pre-profitability unit economics.`;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
@@ -69,17 +128,14 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
       {/* Input */}
       <div className="bg-card border border-border rounded-xl shadow-card p-6 mb-8">
         <div className="mb-4">
-          <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Company</label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input
-              type="text"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder="Enter company name or ticker"
-              className="w-full h-[42px] pl-10 pr-4 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
-            />
-          </div>
+          <CompanyAutocomplete
+            value={company}
+            onChange={setCompany}
+            onTickerSelect={setTicker}
+            placeholder="Enter company name or ticker"
+            icon={<Search className="w-4 h-4" />}
+            label="Company"
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -160,7 +216,7 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {mockComps.map((c, i) => (
+                  {peers.map((c, i) => (
                     <tr key={i}>
                       <td className="font-medium text-foreground">{c.company}</td>
                       <td className="text-muted-foreground">{c.ticker}</td>
@@ -172,34 +228,37 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
                       <td className="num">{c.marketCap}</td>
                     </tr>
                   ))}
-                  {/* Summary stats */}
-                  <tr className="border-t-2 border-border">
-                    <td colSpan={2} className="font-semibold text-foreground text-xs uppercase tracking-wide">25th %ile</td>
-                    <td className="num font-medium">{summaryStats.evEbitda.p25}</td>
-                    <td className="num font-medium">{summaryStats.evRevenue.p25}</td>
-                    <td className="num font-medium">{summaryStats.pe.p25}</td>
-                    <td className="num font-medium">{summaryStats.revGrowth.p25}</td>
-                    <td className="num font-medium">{summaryStats.ebitdaMargin.p25}</td>
-                    <td></td>
-                  </tr>
-                  <tr>
-                    <td colSpan={2} className="font-semibold text-foreground text-xs uppercase tracking-wide">Median</td>
-                    <td className="num font-medium">{summaryStats.evEbitda.median}</td>
-                    <td className="num font-medium">{summaryStats.evRevenue.median}</td>
-                    <td className="num font-medium">{summaryStats.pe.median}</td>
-                    <td className="num font-medium">{summaryStats.revGrowth.median}</td>
-                    <td className="num font-medium">{summaryStats.ebitdaMargin.median}</td>
-                    <td></td>
-                  </tr>
-                  <tr>
-                    <td colSpan={2} className="font-semibold text-foreground text-xs uppercase tracking-wide">75th %ile</td>
-                    <td className="num font-medium">{summaryStats.evEbitda.p75}</td>
-                    <td className="num font-medium">{summaryStats.evRevenue.p75}</td>
-                    <td className="num font-medium">{summaryStats.pe.p75}</td>
-                    <td className="num font-medium">{summaryStats.revGrowth.p75}</td>
-                    <td className="num font-medium">{summaryStats.ebitdaMargin.p75}</td>
-                    <td></td>
-                  </tr>
+                  {summaryStats && (
+                    <>
+                      <tr className="border-t-2 border-border">
+                        <td colSpan={2} className="font-semibold text-foreground text-xs uppercase tracking-wide">25th %ile</td>
+                        <td className="num font-medium">{summaryStats.evEbitda.p25}</td>
+                        <td className="num font-medium">{summaryStats.evRevenue.p25}</td>
+                        <td className="num font-medium">{summaryStats.pe.p25}</td>
+                        <td className="num font-medium">{summaryStats.revGrowth.p25}</td>
+                        <td className="num font-medium">{summaryStats.ebitdaMargin.p25}</td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td colSpan={2} className="font-semibold text-foreground text-xs uppercase tracking-wide">Median</td>
+                        <td className="num font-medium">{summaryStats.evEbitda.median}</td>
+                        <td className="num font-medium">{summaryStats.evRevenue.median}</td>
+                        <td className="num font-medium">{summaryStats.pe.median}</td>
+                        <td className="num font-medium">{summaryStats.revGrowth.median}</td>
+                        <td className="num font-medium">{summaryStats.ebitdaMargin.median}</td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td colSpan={2} className="font-semibold text-foreground text-xs uppercase tracking-wide">75th %ile</td>
+                        <td className="num font-medium">{summaryStats.evEbitda.p75}</td>
+                        <td className="num font-medium">{summaryStats.evRevenue.p75}</td>
+                        <td className="num font-medium">{summaryStats.pe.p75}</td>
+                        <td className="num font-medium">{summaryStats.revGrowth.p75}</td>
+                        <td className="num font-medium">{summaryStats.ebitdaMargin.p75}</td>
+                        <td></td>
+                      </tr>
+                    </>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -210,7 +269,7 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
           {/* Section B: Selection Rationale */}
           <section>
             <h3 className="text-lg font-semibold text-foreground mb-4">B. Comp Selection Rationale</h3>
-            <AISection label="Selection Rationale" content={selectionRationale} />
+            <AISection label="Selection Rationale" content={results.rationale || "Rationale unavailable."} />
           </section>
 
           <hr className="border-border" />
