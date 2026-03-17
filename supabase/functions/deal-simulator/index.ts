@@ -30,12 +30,11 @@ function safeParse(text: string): unknown {
 }
 
 async function fetchFMPData(ticker: string, fmpKey: string): Promise<CompanyData> {
-  const base = "https://financialmodelingprep.com";
   const [profileRes, metricsRes, ratiosRes, growthRes] = await Promise.all([
-    fetch(`${base}/api/v3/profile/${ticker}?apikey=${fmpKey}`),
-    fetch(`${base}/api/v3/key-metrics/${ticker}?limit=1&apikey=${fmpKey}`),
-    fetch(`${base}/api/v3/ratios/${ticker}?limit=1&apikey=${fmpKey}`),
-    fetch(`${base}/api/v3/financial-growth/${ticker}?limit=2&apikey=${fmpKey}`),
+    fetch(`https://financialmodelingprep.com/stable/profile?symbol=${ticker}&apikey=${fmpKey}`),
+    fetch(`https://financialmodelingprep.com/stable/key-metrics?symbol=${ticker}&limit=1&apikey=${fmpKey}`),
+    fetch(`https://financialmodelingprep.com/stable/ratios?symbol=${ticker}&limit=1&apikey=${fmpKey}`),
+    fetch(`https://financialmodelingprep.com/stable/financial-growth?symbol=${ticker}&limit=2&apikey=${fmpKey}`),
   ]);
 
   const [profileText, metricsText, ratiosText, growthText] = await Promise.all([
