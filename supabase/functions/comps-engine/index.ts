@@ -37,16 +37,23 @@ function fmtPct(val: number | null): string {
 
 async function fetchPeerData(ticker: string, fmpKey: string): Promise<PeerData | null> {
   try {
+    const base = "https://financialmodelingprep.com";
     const [profileRes, metricsRes, ratiosRes, growthRes] = await Promise.all([
-      fetch(`https://financialmodelingprep.com/stable/profile?symbol=${ticker}&apikey=${fmpKey}`),
-      fetch(`https://financialmodelingprep.com/stable/key-metrics?symbol=${ticker}&limit=1&apikey=${fmpKey}`),
-      fetch(`https://financialmodelingprep.com/stable/ratios?symbol=${ticker}&limit=1&apikey=${fmpKey}`),
-      fetch(`https://financialmodelingprep.com/stable/financial-growth?symbol=${ticker}&limit=2&apikey=${fmpKey}`),
+      fetch(`${base}/api/v3/profile/${ticker}?apikey=${fmpKey}`),
+      fetch(`${base}/api/v3/key-metrics/${ticker}?limit=1&apikey=${fmpKey}`),
+      fetch(`${base}/api/v3/ratios/${ticker}?limit=1&apikey=${fmpKey}`),
+      fetch(`${base}/api/v3/financial-growth/${ticker}?limit=2&apikey=${fmpKey}`),
     ]);
 
-    const [profile, metrics, ratios, growth] = await Promise.all([
-      profileRes.json(), metricsRes.json(), ratiosRes.json(), growthRes.json(),
+    const [profText, metText, ratText, groText] = await Promise.all([
+      profileRes.text(), metricsRes.text(), ratiosRes.text(), growthRes.text(),
     ]);
+
+    const safeParse = (t: string) => { try { return JSON.parse(t); } catch { return []; } };
+    const profile = safeParse(profText);
+    const metrics = safeParse(metText);
+    const ratios = safeParse(ratText);
+    const growth = safeParse(groText);
 
     const p = Array.isArray(profile) ? profile[0] : profile;
     const m = Array.isArray(metrics) ? metrics[0] : metrics;
