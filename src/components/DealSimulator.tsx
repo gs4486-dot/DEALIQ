@@ -14,9 +14,7 @@ interface DealSimulatorProps {
 
 const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps) => {
   const [acquirer, setAcquirer] = useState("");
-  const [acquirerTicker, setAcquirerTicker] = useState("");
   const [target, setTarget] = useState("");
-  const [targetTicker, setTargetTicker] = useState("");
   const [dealStructure, setDealStructure] = useState("all-cash");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
