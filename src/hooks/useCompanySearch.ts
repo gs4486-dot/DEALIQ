@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 
 interface SearchResult {
   symbol: string;
@@ -20,13 +19,6 @@ export function useCompanySearch() {
     }
     setIsSearching(true);
     try {
-      const { data, error } = await supabase.functions.invoke("company-search", {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-        body: null,
-      });
-
-      // company-search uses GET with query params, so we need to call it differently
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/company-search?query=${encodeURIComponent(q)}`;
       const res = await fetch(url, {
         headers: {
