@@ -30,13 +30,20 @@ async function fetchAlphaVantageData(ticker: string, avKey: string): Promise<Com
     throw new Error(`Alpha Vantage error for ${ticker}`);
   }
 
-  if (data["Error Message"] || data["Note"]) {
-    console.error("AV error:", data["Error Message"] || data["Note"]);
-    throw new Error(data["Error Message"] || data["Note"]);
+  if (data["Error Message"]) {
+    throw new Error(`AV error: ${data["Error Message"]}`);
+  }
+  if (data["Note"]) {
+    throw new Error(`AV rate limit: ${data["Note"]}`);
+  }
+  if (data["Information"]) {
+    throw new Error(`AV info: ${data["Information"]}`);
   }
 
+  console.log(`AV response keys for ${ticker}:`, Object.keys(data).join(", "), "| first values:", JSON.stringify(data).substring(0, 300));
+
   if (!data["Symbol"]) {
-    throw new Error(`No data found for ${ticker}`);
+    throw new Error(`No data found for ${ticker}. Response: ${JSON.stringify(data).substring(0, 200)}`);
   }
 
   const parseNum = (v: string | undefined) => {
