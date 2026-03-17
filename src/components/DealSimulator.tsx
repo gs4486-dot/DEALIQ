@@ -58,9 +58,9 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-5xl mx-auto px-6 py-10">
       <h2 className="text-[32px] font-bold text-foreground mb-1">Deal Simulator</h2>
-      <p className="text-muted-foreground text-sm mb-8">Simulate any M&A transaction between two US public companies</p>
+      <p className="text-muted-foreground text-sm mb-10">Model any M&A transaction between two US public companies</p>
 
       {/* Input Section */}
       <div className="bg-card border border-border rounded-xl shadow-card p-6 mb-8">
@@ -135,7 +135,7 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
 
       {/* Results */}
       {results && !isAnalyzing && (
-        <div className="space-y-8">
+        <div className="space-y-10">
           {/* Section A: Deal Overview */}
           <section>
             <h3 className="text-lg font-semibold text-foreground mb-4">A. Deal Overview</h3>

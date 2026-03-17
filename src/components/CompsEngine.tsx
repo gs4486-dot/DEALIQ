@@ -119,9 +119,9 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
   ) || damodaranData.industries[0];
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-5xl mx-auto px-6 py-10">
       <h2 className="text-[32px] font-bold text-foreground mb-1">Comps Engine</h2>
-      <p className="text-muted-foreground text-sm mb-8">AI-selected comparable companies with live multiples</p>
+      <p className="text-muted-foreground text-sm mb-10">Generate comparable peer sets with live trading multiples</p>
 
       {/* Input */}
       <div className="bg-card border border-border rounded-xl shadow-card p-6 mb-8">
@@ -199,7 +199,7 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
       )}
 
       {results && !isLoading && (
-        <div className="space-y-8">
+        <div className="space-y-10">
           {/* Section A: Comparable Companies Table */}
           <section>
             <h3 className="text-lg font-semibold text-foreground mb-4">A. Comparable Companies</h3>
