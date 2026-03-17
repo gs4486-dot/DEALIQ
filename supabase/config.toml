@@ -1,1 +1,10 @@
 project_id = "vzwyqtvvfodvqyxyjyyl"
+
+[functions.deal-simulator]
+verify_jwt = false
+
+[functions.comps-engine]
+verify_jwt = false
+
+[functions.company-search]
+verify_jwt = false
