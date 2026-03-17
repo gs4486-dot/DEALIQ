@@ -28,8 +28,8 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
   }, [prefill, onClearPrefill]);
 
   const runAnalysis = async () => {
-    if (!acquirerTicker || !targetTicker) {
-      toast.error("Please select both companies from the dropdown");
+    if (!acquirer.trim() || !target.trim()) {
+      toast.error("Please enter both ticker symbols");
       return;
     }
     setIsAnalyzing(true);
