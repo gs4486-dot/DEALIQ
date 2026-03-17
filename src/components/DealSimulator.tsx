@@ -3,7 +3,6 @@ import { Building2, Crosshair, Loader2, AlertTriangle } from "lucide-react";
 import type { ViewMode } from "@/pages/Index";
 import AISection from "@/components/AISection";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import CompanyAutocomplete from "@/components/CompanyAutocomplete";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
