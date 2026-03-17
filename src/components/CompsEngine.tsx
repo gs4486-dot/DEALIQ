@@ -95,7 +95,7 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
 
     try {
       const { data, error } = await supabase.functions.invoke("comps-engine", {
-        body: { ticker, sector: industry, revenueRange },
+        body: { ticker: ticker.trim().toUpperCase(), sector: industry, revenueRange },
       });
 
       if (error) throw error;
