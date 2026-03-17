@@ -86,8 +86,8 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
   const [results, setResults] = useState<{ peers: PeerData[]; rationale: string; target: PeerData | null } | null>(null);
 
   const findComps = async () => {
-    if (!ticker) {
-      toast.error("Please select a company from the dropdown");
+    if (!ticker.trim()) {
+      toast.error("Please enter a ticker symbol");
       return;
     }
     setIsLoading(true);
