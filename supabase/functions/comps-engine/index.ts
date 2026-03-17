@@ -35,36 +35,44 @@ function fmtPct(val: number | null): string {
   return `${(val * 100).toFixed(1)}%`;
 }
 
-async function fetchPeerData(ticker: string): Promise<PeerData | null> {
+async function fetchPeerData(ticker: string, fmpKey: string): Promise<PeerData | null> {
   try {
-    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=summaryProfile,financialData,defaultKeyStatistics,price`;
-    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-    const text = await res.text();
-    let json: any;
-    try { json = JSON.parse(text); } catch { return null; }
+    const base = "https://financialmodelingprep.com/api/v3";
+    const [profileRes, metricsRes, ratiosRes, growthRes] = await Promise.all([
+      fetch(`${base}/profile/${ticker}?apikey=${fmpKey}`),
+      fetch(`${base}/key-metrics/${ticker}?limit=1&apikey=${fmpKey}`),
+      fetch(`${base}/ratios/${ticker}?limit=1&apikey=${fmpKey}`),
+      fetch(`${base}/financial-growth/${ticker}?limit=2&apikey=${fmpKey}`),
+    ]);
 
-    const result = json?.quoteSummary?.result?.[0];
-    if (!result) return null;
+    const [profText, metText, ratText, groText] = await Promise.all([
+      profileRes.text(), metricsRes.text(), ratiosRes.text(), growthRes.text(),
+    ]);
 
-    const price = result.price || {};
-    const fin = result.financialData || {};
-    const stats = result.defaultKeyStatistics || {};
+    const safeParse = (t: string) => { try { return JSON.parse(t); } catch { return []; } };
+    const profile = safeParse(profText);
+    const metrics = safeParse(metText);
+    const ratios = safeParse(ratText);
+    const growth = safeParse(groText);
 
-    const name = price.shortName || price.longName || ticker;
-    if (!name) return null;
+    const p = Array.isArray(profile) ? profile[0] : profile;
+    const m = Array.isArray(metrics) ? metrics[0] : metrics;
+    const r = Array.isArray(ratios) ? ratios[0] : ratios;
+    const g = Array.isArray(growth) ? growth : [];
 
-    const revenueGrowth = fin.revenueGrowth?.raw ?? null;
-    const ebitdaMargin = fin.ebitdaMargins?.raw ?? null;
+    if (!p?.companyName) return null;
+
+    const revenueGrowth = g.length > 1 ? g[1]?.revenueGrowth : g[0]?.revenueGrowth;
 
     return {
-      company: name,
-      ticker: price.symbol || ticker,
-      evEbitda: fmt(stats.enterpriseToEbitda?.raw ?? null),
-      evRevenue: fmt(stats.enterpriseToRevenue?.raw ?? null),
-      pe: fmt(stats.trailingPE?.raw ?? price.trailingPE?.raw ?? null),
+      company: p.companyName,
+      ticker: p.symbol,
+      evEbitda: fmt(m?.evToEBITDA),
+      evRevenue: fmt(m?.evToSales),
+      pe: fmt(r?.priceToEarningsRatio),
       revGrowth: fmtPct(revenueGrowth),
-      ebitdaMargin: fmtPct(ebitdaMargin),
-      marketCap: formatNumber(price.marketCap?.raw ?? null),
+      ebitdaMargin: fmtPct(r?.ebitdaMargin),
+      marketCap: formatNumber(m?.marketCap ?? p?.mktCap),
     };
   } catch (e) {
     console.error(`Error fetching data for ${ticker}:`, e);
@@ -86,14 +94,16 @@ serve(async (req) => {
       });
     }
 
+    const FMP_KEY = Deno.env.get("FMP_API_KEY");
     const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_KEY) {
-      return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }), {
+
+    if (!FMP_KEY || !ANTHROPIC_KEY) {
+      return new Response(JSON.stringify({ error: "API keys not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const targetData = await fetchPeerData(ticker);
+    const targetData = await fetchPeerData(ticker, FMP_KEY);
 
     const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -142,7 +152,7 @@ Focus on sector alignment, similar business models, and comparable revenue scale
     }
 
     const peerResults = await Promise.all(
-      peerTickers.map((t: string) => fetchPeerData(t))
+      peerTickers.map((t: string) => fetchPeerData(t, FMP_KEY))
     );
     const peers = peerResults.filter((p): p is PeerData => p !== null);
 
