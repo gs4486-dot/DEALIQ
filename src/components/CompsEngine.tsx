@@ -78,7 +78,6 @@ function calcStats(peers: PeerData[]) {
 }
 
 const CompsEngine = ({ viewMode }: CompsEngineProps) => {
-  const [company, setCompany] = useState("");
   const [ticker, setTicker] = useState("");
   const [industry, setIndustry] = useState("");
   const [geography, setGeography] = useState("United States");
