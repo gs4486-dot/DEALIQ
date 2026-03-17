@@ -38,8 +38,8 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
     try {
       const { data, error } = await supabase.functions.invoke("deal-simulator", {
         body: {
-          acquirerTicker,
-          targetTicker,
+          acquirerTicker: acquirer.trim().toUpperCase(),
+          targetTicker: target.trim().toUpperCase(),
           dealStructure,
           viewMode,
         },
