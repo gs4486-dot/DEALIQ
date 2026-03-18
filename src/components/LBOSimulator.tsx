@@ -179,7 +179,7 @@ const LBOSimulator = () => {
                 <thead>
                   <tr>
                     <th>Metric</th>
-                    <th>Value</th>
+                    <th className="text-right">Value</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -255,11 +255,11 @@ const LBOSimulator = () => {
                 <thead>
                   <tr>
                     <th>Scenario</th>
-                    <th>Exit EBITDA</th>
-                    <th>Exit EV</th>
-                    <th>Exit Equity</th>
-                    <th>IRR</th>
-                    <th>Cash-on-Cash</th>
+                    <th className="text-right">Exit EBITDA</th>
+                    <th className="text-right">Exit EV</th>
+                    <th className="text-right">Exit Equity</th>
+                    <th className="text-right">IRR</th>
+                    <th className="text-right">Cash-on-Cash</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -130,7 +130,7 @@ const FootballFieldChart = ({
   const span = Math.max(maxV - minV, maxV * 0.05, 1);
   // Always clip below the minimum (never show empty space to the left)
   const domainMin = Math.max(0, minV - span * 0.08);
-  const domainMax = maxV + span * 0.55; // room for right-side value labels
+  const domainMax = maxV + span * 0.65; // room for right-side value labels
 
   const chartHeight = height ?? Math.max(90, rows.length * 46 + 28);
 
@@ -152,7 +152,7 @@ const FootballFieldChart = ({
         <ComposedChart
           data={data}
           layout="vertical"
-          margin={{ top: 10, right: 72, bottom: 4, left: 8 }}
+          margin={{ top: 10, right: 90, bottom: 4, left: 8 }}
           barSize={20}
         >
           <XAxis
@@ -188,7 +188,7 @@ const FootballFieldChart = ({
                   fontSize: 9,
                   fill: rl.color ?? "#94a3b8",
                   fontWeight: 700,
-                  dy: i % 2 === 0 ? -2 : -14,
+                  dy: [-2, -14, -26, -38][i % 4],
                 }}
               />
             ))}

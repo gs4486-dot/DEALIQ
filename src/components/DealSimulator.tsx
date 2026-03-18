@@ -142,8 +142,8 @@ const DealSimulator = ({ prefill, onClearPrefill }: DealSimulatorProps) => {
                 <thead>
                   <tr>
                     <th>Metric</th>
-                    <th>Acquirer</th>
-                    <th>Target</th>
+                    <th className="text-right">Acquirer</th>
+                    <th className="text-right">Target</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -185,8 +185,8 @@ const DealSimulator = ({ prefill, onClearPrefill }: DealSimulatorProps) => {
                 <thead>
                   <tr>
                     <th>Scenario</th>
-                    <th>Acquisition Cost (EV)</th>
-                    <th>Implied Offer Price / Share</th>
+                    <th className="text-right">Acquisition Cost (EV)</th>
+                    <th className="text-right">Implied Offer Price / Share</th>
                   </tr>
                 </thead>
                 <tbody>
