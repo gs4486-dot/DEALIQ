@@ -245,16 +245,23 @@ const DealSimulator = ({ prefill, onClearPrefill }: DealSimulatorProps) => {
             <h3 className="text-lg font-semibold text-foreground mb-4">C. Strategic Rationale</h3>
             <div className="ai-section">
               {results.rationale?.summary && (
-                <p className="text-sm text-foreground font-medium mb-4 leading-relaxed">{results.rationale.summary}</p>
+                <p className="text-sm text-foreground font-medium mb-4 leading-relaxed">
+                  {results.rationale.summary}
+                </p>
               )}
               {results.rationale?.bullets?.length > 0 && (
                 <ul className="space-y-2">
-                  {results.rationale.bullets.map((bullet: string, i: number) => (
-                    <li key={i} className="text-sm text-foreground leading-relaxed flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
-                      <span dangerouslySetInnerHTML={{ __html: bullet.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') }} />
-                    </li>
-                  ))}
+                  {results.rationale.bullets.map((bullet: string, i: number) => {
+                    const html = bullet
+                      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+                      .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+                    return (
+                      <li key={i} className="text-sm text-foreground leading-relaxed flex items-start gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
+                        <span dangerouslySetInnerHTML={{ __html: html }} />
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
               {!results.rationale?.summary && !results.rationale?.bullets?.length && (

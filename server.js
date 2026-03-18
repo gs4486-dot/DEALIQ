@@ -243,8 +243,36 @@ Deal Structure: ${dealStructure}`;
     let synergiesData = { synergies: [], risks: [] };
     let riskFlagsData = { flags: [] };
 
-    try { synergiesData = JSON.parse(synergiesText.replace(/```json|```/g, "").trim()); } catch {}
-    try { riskFlagsData = JSON.parse(riskFlagsText.replace(/```json|```/g, "").trim()); } catch {}
+    /** Robustly parse a JSON response that may have markdown fences or extra text */
+    const parseJSON = (text, fallback) => {
+      const stripped = text.replace(/```json\n?|```/g, "").trim();
+      // Try 1: direct parse
+      try { return JSON.parse(stripped); } catch {}
+      // Try 2: extract the first {...} or [...] block
+      const objMatch = stripped.match(/\{[\s\S]*\}/);
+      if (objMatch) { try { return JSON.parse(objMatch[0]); } catch {} }
+      const arrMatch = stripped.match(/\[[\s\S]*\]/);
+      if (arrMatch) { try { return JSON.parse(arrMatch[0]); } catch {} }
+      return fallback;
+    };
+
+    synergiesData = parseJSON(synergiesText, { synergies: [], risks: [] });
+    riskFlagsData = parseJSON(riskFlagsText, { flags: [] });
+
+    // Parse rationale — if JSON parse fails, try to extract summary/bullets with regex
+    let rationaleData = parseJSON(rationaleText, null);
+    if (!rationaleData || typeof rationaleData.summary !== "string") {
+      const sumMatch  = rationaleText.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      const bulkMatch = rationaleText.match(/"bullets"\s*:\s*\[([\s\S]*?)\]/);
+      const bullets   = bulkMatch
+        ? (bulkMatch[1].match(/"((?:[^"\\]|\\.)*)"(?:\s*,|\s*\])/g) || [])
+            .map(s => s.replace(/^"|",?\s*\]?$/g, "").replace(/\\"/g, '"'))
+        : [];
+      rationaleData = {
+        summary: sumMatch ? sumMatch[1].replace(/\\"/g, '"') : "",
+        bullets,
+      };
+    }
 
     // Premiums-paid valuation: 15% / 25% / 40% over current EV
     const baseEv   = targetData.rawEv || targetData.rawMktCap;
@@ -260,11 +288,6 @@ Deal Structure: ${dealStructure}`;
     const evLow  = baseEv * 1.15;
     const evMid  = baseEv * 1.25;
     const evHigh = baseEv * 1.40;
-
-    let rationaleData = { summary: "", bullets: [] };
-    try { rationaleData = JSON.parse(rationaleText.replace(/```json|```/g, "").trim()); } catch {
-      rationaleData = { summary: rationaleText, bullets: [] };
-    }
 
     res.json({
       acquirerData,
