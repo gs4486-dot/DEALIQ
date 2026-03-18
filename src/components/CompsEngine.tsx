@@ -1,28 +1,35 @@
 import { useState } from "react";
 import { Search, Loader2 } from "lucide-react";
-import type { ViewMode } from "@/pages/Index";
+import { API_URL } from "@/lib/api";
+import TickerSearchInput from "@/components/TickerSearchInput";
 import AISection from "@/components/AISection";
 import SkeletonBlock from "@/components/SkeletonBlock";
+import FootballFieldChart, { parseMultiple, type FFRow, type FFRefLine } from "@/components/FootballFieldChart";
+
 import damodaranData from "@/data/damodaran.json";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-interface CompsEngineProps {
-  viewMode: ViewMode;
-}
-
 interface PeerData {
-  company: string;
+  name: string;
   ticker: string;
   evEbitda: string;
   evRevenue: string;
-  pe: string;
-  revGrowth: string;
+  revenueGrowth: string;
   ebitdaMargin: string;
   marketCap: string;
+  totalRevenue: string;
+  ebitda: string;
+  // raw values for calculations
+  rawEv?: number;
+  rawMktCap?: number;
 }
 
-const revenueRanges = ["Any", "Under $100M", "$100M–$500M", "$500M–$2B", "Above $2B"];
+interface CompsResults {
+  peers: PeerData[];
+  rationale: string;
+  target: PeerData | null;
+  damodaranIndustry?: string;
+}
 
 function calcStats(peers: PeerData[]) {
   const parseNum = (s: string) => {
@@ -40,9 +47,9 @@ function calcStats(peers: PeerData[]) {
       return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
     };
     return {
-      p25: `${q(0.25).toFixed(1)}x`,
+      p25:    `${q(0.25).toFixed(1)}x`,
       median: `${q(0.5).toFixed(1)}x`,
-      p75: `${q(0.75).toFixed(1)}x`,
+      p75:    `${q(0.75).toFixed(1)}x`,
     };
   };
 
@@ -56,34 +63,29 @@ function calcStats(peers: PeerData[]) {
       return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
     };
     return {
-      p25: `${q(0.25).toFixed(1)}%`,
+      p25:    `${q(0.25).toFixed(1)}%`,
       median: `${q(0.5).toFixed(1)}%`,
-      p75: `${q(0.75).toFixed(1)}%`,
+      p75:    `${q(0.75).toFixed(1)}%`,
     };
   };
 
   const evEbitdaVals = peers.map(p => parseNum(p.evEbitda)).filter((n): n is number => n !== null);
-  const evRevVals = peers.map(p => parseNum(p.evRevenue)).filter((n): n is number => n !== null);
-  const peVals = peers.map(p => parseNum(p.pe)).filter((n): n is number => n !== null);
-  const rgVals = peers.map(p => parseNum(p.revGrowth)).filter((n): n is number => n !== null);
-  const emVals = peers.map(p => parseNum(p.ebitdaMargin)).filter((n): n is number => n !== null);
+  const evRevVals    = peers.map(p => parseNum(p.evRevenue)).filter((n): n is number => n !== null);
+  const rgVals       = peers.map(p => parseNum(p.revenueGrowth)).filter((n): n is number => n !== null);
+  const emVals       = peers.map(p => parseNum(p.ebitdaMargin)).filter((n): n is number => n !== null);
 
   return {
-    evEbitda: getPercentiles(evEbitdaVals),
-    evRevenue: getPercentiles(evRevVals),
-    pe: getPercentiles(peVals),
-    revGrowth: getPercentilesPct(rgVals),
+    evEbitda:    getPercentiles(evEbitdaVals),
+    evRevenue:   getPercentiles(evRevVals),
+    revGrowth:   getPercentilesPct(rgVals),
     ebitdaMargin: getPercentilesPct(emVals),
   };
 }
 
-const CompsEngine = ({ viewMode }: CompsEngineProps) => {
-  const [ticker, setTicker] = useState("");
-  const [industry, setIndustry] = useState("");
-  const [geography, setGeography] = useState("United States");
-  const [revenueRange, setRevenueRange] = useState("Any");
+const CompsEngine = () => {
+  const [ticker, setTicker]     = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState<{ peers: PeerData[]; rationale: string; target: PeerData | null } | null>(null);
+  const [results, setResults]   = useState<CompsResults | null>(null);
 
   const findComps = async () => {
     if (!ticker.trim()) {
@@ -94,29 +96,41 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
     setResults(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke("comps-engine", {
-        body: { ticker: ticker.trim().toUpperCase(), sector: industry, revenueRange },
+      const response = await fetch(`${API_URL}/api/comps-engine`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker: ticker.trim().toUpperCase() }),
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Comps analysis failed");
 
       setResults(data);
     } catch (e: any) {
       console.error("Comps engine error:", e);
-      toast.error(e.message || "Failed to find comparables. Check your API keys.");
+      toast.error(e.message || "Failed to find comparables. Make sure the server is running on port 3001.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const peers = results?.peers || [];
+  const peers        = results?.peers || [];
   const summaryStats = peers.length > 0 ? calcStats(peers) : null;
 
-  // Find matching Damodaran industry
-  const matchedIndustry = damodaranData.industries.find(
-    (ind) => ind.industry.toLowerCase().includes((industry || "software").toLowerCase())
+  // Damodaran industry row — server resolved (includes Claude fallback)
+  const damodaranRow = damodaranData.industries.find(
+    (ind) => ind.industry === results?.damodaranIndustry
   ) || damodaranData.industries[0];
+
+  // Relevered beta: β_levered = β_unlevered × (1 + (1−t) × D/E)
+  const targetRawEv     = (results?.target as any)?.rawEv     || 0;
+  const targetRawMktCap = (results?.target as any)?.rawMktCap || 0;
+  const netDebt         = targetRawEv - targetRawMktCap;
+  const deRatio         = targetRawMktCap > 0 && netDebt > 0 ? netDebt / targetRawMktCap : 0;
+  const TAX_RATE        = 0.25;
+  const releveredBeta   = damodaranRow.beta * (1 + (1 - TAX_RATE) * deRatio);
+  const RF              = damodaranData.riskFreeRate ?? 4.5;
+  const releveredCoE    = RF + releveredBeta * damodaranRow.erp;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
@@ -126,52 +140,14 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
       {/* Input */}
       <div className="bg-card border border-border rounded-xl shadow-card p-6 mb-8">
         <div className="mb-4">
-          <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Company</label>
-          <div className="relative">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"><Search className="w-4 h-4" /></div>
-            <input
-              type="text"
-              value={ticker}
-              onChange={(e) => setTicker(e.target.value)}
-              placeholder="Enter ticker symbol"
-              className="w-full h-[42px] pl-10 pr-4 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">Enter ticker symbol (e.g. MSFT, AAPL, CRM)</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Industry / Sector</label>
-            <input
-              type="text"
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
-              placeholder="e.g. Cybersecurity"
-              className="w-full h-[42px] px-4 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Geography</label>
-            <input
-              type="text"
-              value={geography}
-              onChange={(e) => setGeography(e.target.value)}
-              className="w-full h-[42px] px-4 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Revenue Range</label>
-            <select
-              value={revenueRange}
-              onChange={(e) => setRevenueRange(e.target.value)}
-              className="w-full h-[42px] px-4 border border-input rounded-lg text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              {revenueRanges.map((r) => (
-                <option key={r}>{r}</option>
-              ))}
-            </select>
-          </div>
+          <TickerSearchInput
+            label="Company"
+            value={ticker}
+            onChange={setTicker}
+            placeholder="Search by name or ticker..."
+            icon={<Search className="w-4 h-4" />}
+            hint="e.g. Apple or AAPL"
+          />
         </div>
 
         <button
@@ -209,61 +185,134 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
                   <tr>
                     <th>Company</th>
                     <th>Ticker</th>
+                    <th className="text-right">LTM Revenue</th>
+                    <th className="text-right">LTM EBITDA</th>
                     <th className="text-right">EV/EBITDA</th>
                     <th className="text-right">EV/Revenue</th>
-                    <th className="text-right">P/E</th>
-                    <th className="text-right">Rev Growth</th>
                     <th className="text-right">EBITDA Margin</th>
-                    <th className="text-right">Market Cap</th>
+                    <th className="text-right">Rev Growth</th>
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Subject company row */}
+                  {results.target && (() => {
+                    const t = results.target as any;
+                    return (
+                      <>
+                        <tr className="bg-primary/5 border-l-2 border-primary">
+                          <td className="font-bold text-primary">{t.name}</td>
+                          <td className="font-bold text-primary">{t.ticker}</td>
+                          <td className="num font-bold text-primary">{t.totalRevenue}</td>
+                          <td className="num font-bold text-primary">{t.ebitda}</td>
+                          <td className="num font-bold text-primary">{t.evEbitda}</td>
+                          <td className="num font-bold text-primary">{t.evRevenue}</td>
+                          <td className={`num font-bold ${parseFloat(t.ebitdaMargin) >= 0 ? "text-success" : "text-destructive"}`}>{t.ebitdaMargin}</td>
+                          <td className={`num font-bold ${parseFloat(t.revenueGrowth) >= 0 ? "text-success" : "text-destructive"}`}>{t.revenueGrowth}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={8} className="py-1 px-3">
+                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">
+                              <div className="flex-1 h-px bg-border" />
+                              Peer Set
+                              <div className="flex-1 h-px bg-border" />
+                            </div>
+                          </td>
+                        </tr>
+                      </>
+                    );
+                  })()}
                   {peers.map((c, i) => (
                     <tr key={i}>
-                      <td className="font-medium text-foreground">{c.company}</td>
+                      <td className="font-medium text-foreground">{c.name}</td>
                       <td className="text-muted-foreground">{c.ticker}</td>
+                      <td className="num">{c.totalRevenue}</td>
+                      <td className="num">{c.ebitda}</td>
                       <td className="num">{c.evEbitda}</td>
                       <td className="num">{c.evRevenue}</td>
-                      <td className="num">{c.pe}</td>
-                      <td className={`num ${parseFloat(c.revGrowth) >= 0 ? "text-success" : "text-destructive"}`}>{c.revGrowth}</td>
                       <td className={`num ${parseFloat(c.ebitdaMargin) >= 0 ? "text-success" : "text-destructive"}`}>{c.ebitdaMargin}</td>
-                      <td className="num">{c.marketCap}</td>
+                      <td className={`num ${parseFloat(c.revenueGrowth) >= 0 ? "text-success" : "text-destructive"}`}>{c.revenueGrowth}</td>
                     </tr>
                   ))}
                   {summaryStats && (
                     <>
                       <tr className="border-t-2 border-border">
                         <td colSpan={2} className="font-semibold text-foreground text-xs uppercase tracking-wide">25th %ile</td>
+                        <td className="num font-medium text-muted-foreground">—</td>
+                        <td className="num font-medium text-muted-foreground">—</td>
                         <td className="num font-medium">{summaryStats.evEbitda.p25}</td>
                         <td className="num font-medium">{summaryStats.evRevenue.p25}</td>
-                        <td className="num font-medium">{summaryStats.pe.p25}</td>
-                        <td className="num font-medium">{summaryStats.revGrowth.p25}</td>
                         <td className="num font-medium">{summaryStats.ebitdaMargin.p25}</td>
-                        <td></td>
+                        <td className="num font-medium">{summaryStats.revGrowth.p25}</td>
                       </tr>
                       <tr>
                         <td colSpan={2} className="font-semibold text-foreground text-xs uppercase tracking-wide">Median</td>
+                        <td className="num font-medium text-muted-foreground">—</td>
+                        <td className="num font-medium text-muted-foreground">—</td>
                         <td className="num font-medium">{summaryStats.evEbitda.median}</td>
                         <td className="num font-medium">{summaryStats.evRevenue.median}</td>
-                        <td className="num font-medium">{summaryStats.pe.median}</td>
-                        <td className="num font-medium">{summaryStats.revGrowth.median}</td>
                         <td className="num font-medium">{summaryStats.ebitdaMargin.median}</td>
-                        <td></td>
+                        <td className="num font-medium">{summaryStats.revGrowth.median}</td>
                       </tr>
                       <tr>
                         <td colSpan={2} className="font-semibold text-foreground text-xs uppercase tracking-wide">75th %ile</td>
+                        <td className="num font-medium text-muted-foreground">—</td>
+                        <td className="num font-medium text-muted-foreground">—</td>
                         <td className="num font-medium">{summaryStats.evEbitda.p75}</td>
                         <td className="num font-medium">{summaryStats.evRevenue.p75}</td>
-                        <td className="num font-medium">{summaryStats.pe.p75}</td>
-                        <td className="num font-medium">{summaryStats.revGrowth.p75}</td>
                         <td className="num font-medium">{summaryStats.ebitdaMargin.p75}</td>
-                        <td></td>
+                        <td className="num font-medium">{summaryStats.revGrowth.p75}</td>
                       </tr>
                     </>
                   )}
                 </tbody>
               </table>
             </div>
+
+            {/* EV/EBITDA peer chart — subject company shown as reference line */}
+            {(() => {
+              const allRows: FFRow[] = peers
+                .map((p: any) => {
+                  const v = parseMultiple(p.evEbitda);
+                  if (v === null) return null;
+                  const label = p.ticker ?? "—";
+                  return { label, value: v, displayValue: p.evEbitda, color: "#4263eb" } as FFRow;
+                })
+                .filter((r): r is FFRow => r !== null)
+                .sort((a, b) => b.value - a.value);
+
+              if (allRows.length === 0) return null;
+
+              // Outlier filtering: exclude values > Q3 + 2.5 * IQR
+              const sortedVals = [...allRows.map(r => r.value)].sort((a, b) => a - b);
+              const q1   = sortedVals[Math.floor(sortedVals.length * 0.25)] ?? 0;
+              const q3   = sortedVals[Math.floor(sortedVals.length * 0.75)] ?? 0;
+              const fence = q3 + 2.5 * (q3 - q1);
+              const rows     = allRows.filter(r => r.value <= fence);
+              const outliers = allRows.filter(r => r.value > fence);
+
+              const p25 = summaryStats ? parseMultiple(summaryStats.evEbitda.p25)    : null;
+              const med = summaryStats ? parseMultiple(summaryStats.evEbitda.median)  : null;
+              const p75 = summaryStats ? parseMultiple(summaryStats.evEbitda.p75)     : null;
+              const subjectVal = results.target ? parseMultiple((results.target as any).evEbitda) : null;
+
+              const refLines: FFRefLine[] = [
+                p25 ? { value: p25, label: "P25",    color: "#94a3b8" } : null,
+                med ? { value: med, label: "Median",  color: "#4263eb" } : null,
+                p75 ? { value: p75, label: "P75",    color: "#94a3b8" } : null,
+                subjectVal ? { value: subjectVal, label: results.target?.ticker ?? "Subject", color: "#e03131" } : null,
+              ].filter((r): r is FFRefLine => r !== null);
+
+              return (
+                <FootballFieldChart
+                  title="EV / EBITDA — Peer Set"
+                  subtitle={`Sorted descending · dashed lines: P25 / Median / P75 / Subject${outliers.length > 0 ? ` · outliers excluded: ${outliers.map(r => `${r.label} (${r.displayValue})`).join(", ")}` : ""}`}
+                  rows={rows}
+                  referenceLines={refLines}
+                  formatTick={(v) => `${v.toFixed(1)}x`}
+                  yAxisWidth={64}
+                />
+              );
+            })()}
           </section>
 
           <hr className="border-border" />
@@ -289,20 +338,33 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
                 </thead>
                 <tbody>
                   <tr>
-                    <td className="font-medium text-foreground">Industry</td>
-                    <td className="num">{matchedIndustry.industry}</td>
+                    <td className="font-medium text-foreground">Industry Classification</td>
+                    <td className="num">{damodaranRow.industry}</td>
                   </tr>
                   <tr>
-                    <td className="font-medium text-foreground">Industry Beta (Unlevered)</td>
-                    <td className="num">{matchedIndustry.beta.toFixed(2)}</td>
+                    <td className="font-medium text-foreground">Unlevered Beta (Industry)</td>
+                    <td className="num">{damodaranRow.beta.toFixed(2)}</td>
                   </tr>
                   <tr>
-                    <td className="font-medium text-foreground">Equity Risk Premium</td>
-                    <td className="num">{matchedIndustry.erp.toFixed(1)}%</td>
+                    <td className="font-medium text-foreground">
+                      Relevered Beta (Est.)
+                      <span className="text-[11px] text-muted-foreground ml-1.5 font-normal">
+                        D/E {deRatio > 0 ? `${(deRatio * 100).toFixed(0)}%` : "0% (net cash)"}
+                      </span>
+                    </td>
+                    <td className="num">{releveredBeta.toFixed(2)}</td>
                   </tr>
                   <tr>
-                    <td className="font-medium text-foreground">Implied Cost of Equity</td>
-                    <td className="num">{matchedIndustry.costOfEquity.toFixed(2)}%</td>
+                    <td className="font-medium text-foreground">Risk-Free Rate (10Y UST)</td>
+                    <td className="num">{RF.toFixed(1)}%</td>
+                  </tr>
+                  <tr>
+                    <td className="font-medium text-foreground">Equity Risk Premium (US Market)</td>
+                    <td className="num">{damodaranRow.erp.toFixed(1)}%</td>
+                  </tr>
+                  <tr className="border-t border-border">
+                    <td className="font-semibold text-foreground">Implied Cost of Equity (Relevered)</td>
+                    <td className="num font-semibold">{releveredCoE.toFixed(2)}%</td>
                   </tr>
                 </tbody>
               </table>
@@ -317,6 +379,7 @@ const CompsEngine = ({ viewMode }: CompsEngineProps) => {
               >
                 Damodaran Online, NYU Stern School of Business
               </a>
+              {" "}· ERP as of Jan 2024 · β relevered using target D/E at 25% tax rate
             </p>
           </section>
         </div>

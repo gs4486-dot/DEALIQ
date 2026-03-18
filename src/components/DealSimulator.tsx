@@ -1,23 +1,24 @@
 import { useState, useEffect } from "react";
 import { Building2, Crosshair, Loader2, AlertTriangle } from "lucide-react";
-import type { ViewMode } from "@/pages/Index";
+import { API_URL } from "@/lib/api";
 import AISection from "@/components/AISection";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import { supabase } from "@/integrations/supabase/client";
+import TickerSearchInput from "@/components/TickerSearchInput";
+import FootballFieldChart, { parseToB, formatB, type FFRow } from "@/components/FootballFieldChart";
 import { toast } from "sonner";
 
 interface DealSimulatorProps {
-  viewMode: ViewMode;
   prefill: { acquirer: string; target: string } | null;
   onClearPrefill: () => void;
 }
 
-const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps) => {
+const DealSimulator = ({ prefill, onClearPrefill }: DealSimulatorProps) => {
   const [acquirer, setAcquirer] = useState("");
   const [target, setTarget] = useState("");
   const [dealStructure, setDealStructure] = useState("all-cash");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (prefill) {
@@ -34,24 +35,25 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
     }
     setIsAnalyzing(true);
     setResults(null);
+    setError(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke("deal-simulator", {
-        body: {
+      const response = await fetch(`${API_URL}/api/deal-simulator`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           acquirerTicker: acquirer.trim().toUpperCase(),
           targetTicker: target.trim().toUpperCase(),
           dealStructure,
-          viewMode,
-        },
+        }),
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Analysis failed");
       setResults(data);
-    } catch (e: any) {
-      console.error("Deal analysis error:", e);
-      toast.error(e.message || "Failed to run deal analysis. Check your API keys.");
+    } catch (err: any) {
+      console.error("Analysis error:", err);
+      setError(err.message || "Analysis failed. Make sure the server is running on port 3001.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -59,40 +61,28 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
-      <h2 className="text-[32px] font-bold text-foreground mb-1">Deal Simulator</h2>
+      <h2 className="text-[32px] font-bold text-foreground mb-1">M&A Simulator</h2>
       <p className="text-muted-foreground text-sm mb-10">Model any M&A transaction between two US public companies</p>
 
       {/* Input Section */}
       <div className="bg-card border border-border rounded-xl shadow-card p-6 mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Acquirer</label>
-            <div className="relative">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"><Building2 className="w-4 h-4" /></div>
-              <input
-                type="text"
-                value={acquirer}
-                onChange={(e) => setAcquirer(e.target.value)}
-                placeholder="Enter ticker symbol"
-                className="w-full h-[42px] pl-10 pr-4 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Enter ticker symbol (e.g. MSFT, AAPL, CRM)</p>
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground font-medium mb-1.5 block">Target</label>
-            <div className="relative">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"><Crosshair className="w-4 h-4" /></div>
-              <input
-                type="text"
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                placeholder="Enter ticker symbol"
-                className="w-full h-[42px] pl-10 pr-4 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-shadow"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Enter ticker symbol (e.g. MSFT, AAPL, CRM)</p>
-          </div>
+          <TickerSearchInput
+            label="Acquirer"
+            value={acquirer}
+            onChange={setAcquirer}
+            placeholder="Search by name or ticker..."
+            icon={<Building2 className="w-4 h-4" />}
+            hint="e.g. Microsoft or MSFT"
+          />
+          <TickerSearchInput
+            label="Target"
+            value={target}
+            onChange={setTarget}
+            placeholder="Search by name or ticker..."
+            icon={<Crosshair className="w-4 h-4" />}
+            hint="e.g. Salesforce or CRM"
+          />
         </div>
 
         <div className="mb-4">
@@ -124,7 +114,14 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
         </button>
       </div>
 
-      {/* Loading State */}
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-red-700 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Loading */}
       {isAnalyzing && (
         <div className="space-y-6">
           <SkeletonBlock height="h-48" />
@@ -136,7 +133,8 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
       {/* Results */}
       {results && !isAnalyzing && (
         <div className="space-y-10">
-          {/* Section A: Deal Overview */}
+
+          {/* A. Deal Overview */}
           <section>
             <h3 className="text-lg font-semibold text-foreground mb-4">A. Deal Overview</h3>
             <div className="data-table">
@@ -150,25 +148,24 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
                 </thead>
                 <tbody>
                   {[
-                    ["Company Name", results.acquirerData?.name, results.targetData?.name],
-                    ["Ticker", results.acquirerData?.ticker, results.targetData?.ticker],
-                    ["Market Cap", results.acquirerData?.marketCap, results.targetData?.marketCap],
-                    ["Enterprise Value", results.acquirerData?.ev, results.targetData?.ev],
-                    ["EV/EBITDA", results.acquirerData?.evEbitda, results.targetData?.evEbitda],
-                    ["EV/Revenue", results.acquirerData?.evRevenue, results.targetData?.evRevenue],
-                    ["Revenue Growth", results.acquirerData?.revenueGrowth, results.targetData?.revenueGrowth],
-                    ["EBITDA Margin", results.acquirerData?.ebitdaMargin, results.targetData?.ebitdaMargin],
+                    ["Company",         results.acquirerData?.name,          results.targetData?.name],
+                    ["Market Cap",      results.acquirerData?.marketCap,      results.targetData?.marketCap],
+                    ["Enterprise Value",results.acquirerData?.ev,             results.targetData?.ev],
+                    ["LTM Revenue",     results.acquirerData?.totalRevenue,   results.targetData?.totalRevenue],
+                    ["LTM EBITDA",      results.acquirerData?.ebitda,         results.targetData?.ebitda],
+                    ["EV / EBITDA",     results.acquirerData?.evEbitda,       results.targetData?.evEbitda],
+                    ["EBITDA Margin",   results.acquirerData?.ebitdaMargin,   results.targetData?.ebitdaMargin],
+                    ["Revenue Growth",  results.acquirerData?.revenueGrowth,  results.targetData?.revenueGrowth],
                   ].map(([metric, acq, tgt], i) => (
                     <tr key={i}>
                       <td className="font-medium text-foreground">{metric}</td>
-                      <td className="num">{acq || "N/A"}</td>
-                      <td className="num font-medium">{tgt || "N/A"}</td>
+                      <td className={`num ${acq === "N/A" ? "text-destructive font-medium" : ""}`}>{acq || "N/A"}</td>
+                      <td className={`num font-medium ${tgt === "N/A" ? "text-destructive" : ""}`}>{tgt || "N/A"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            {/* Inline warning for missing data */}
             {(Object.values(results.acquirerData || {}).includes("N/A") ||
               Object.values(results.targetData || {}).includes("N/A")) && (
               <p className="text-xs text-destructive mt-2 flex items-center gap-1">
@@ -180,50 +177,96 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
 
           <hr className="border-border" />
 
-          {/* Section B: Implied Valuation (still using derived estimates) */}
+          {/* B. Premiums Paid Analysis */}
           <section>
-            <h3 className="text-lg font-semibold text-foreground mb-4">B. Implied Valuation</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">B. Premiums Paid Analysis</h3>
             <div className="data-table">
               <table className="w-full">
                 <thead>
                   <tr>
                     <th>Scenario</th>
-                    <th>Implied EV</th>
-                    <th>Implied Equity/Share</th>
+                    <th>Acquisition Cost (EV)</th>
+                    <th>Implied Offer Price / Share</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td className="font-medium text-foreground">Low (25th %ile)</td>
-                    <td className="num">{results.targetData?.ev || "N/A"}</td>
-                    <td className="num">—</td>
+                    <td className="font-medium text-foreground">Low (+15% premium)</td>
+                    <td className="num">{results.valuationLow || "N/A"}</td>
+                    <td className="num">{results.valuationLowPerShare || "N/A"}</td>
                   </tr>
                   <tr>
-                    <td className="font-medium text-foreground">Mid (Median)</td>
-                    <td className="num">{results.targetData?.ev || "N/A"}</td>
-                    <td className="num">—</td>
+                    <td className="font-medium text-foreground">Mid (+25% premium)</td>
+                    <td className="num">{results.valuationMid || "N/A"}</td>
+                    <td className="num">{results.valuationMidPerShare || "N/A"}</td>
                   </tr>
                   <tr>
-                    <td className="font-medium text-foreground">High (75th %ile)</td>
-                    <td className="num">{results.targetData?.ev || "N/A"}</td>
-                    <td className="num">—</td>
+                    <td className="font-medium text-foreground">High (+40% premium)</td>
+                    <td className="num">{results.valuationHigh || "N/A"}</td>
+                    <td className="num">{results.valuationHighPerShare || "N/A"}</td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+          {/* Acquisition premium chart */}
+          {(() => {
+            const currentEV = parseToB(results.targetData?.ev);
+            if (currentEV === null) return null;
+            const rows: FFRow[] = [
+              { label: "Low (+15%)", val: results.valuationLow, color: "#94a3b8" },
+              { label: "Mid (+25%)", val: results.valuationMid, color: "#4263eb" },
+              { label: "High (+40%)", val: results.valuationHigh, color: "#2f9e44" },
+            ].reduce((acc, { label, val, color }) => {
+              const v = parseToB(val ?? "");
+              if (v === null) return acc;
+              const premium = v - currentEV;
+              if (premium <= 0) return acc;
+              acc.push({ label, value: premium, displayValue: `+${formatB(premium)}`, color });
+              return acc;
+            }, [] as FFRow[]);
+            if (rows.length === 0) return null;
+            return (
+              <FootballFieldChart
+                title="Acquisition Premium by Scenario"
+                subtitle={`Premium paid above current target EV (${results.targetData?.ev})`}
+                rows={rows}
+                formatTick={formatB}
+                yAxisWidth={110}
+              />
+            );
+          })()}
+          </section>
+
+          <hr className="border-border" />
+
+          {/* C. Strategic Rationale */}
+          <section>
+            <h3 className="text-lg font-semibold text-foreground mb-4">C. Strategic Rationale</h3>
+            <div className="ai-section">
+              {results.rationale?.summary && (
+                <p className="text-sm text-foreground font-medium mb-4 leading-relaxed">{results.rationale.summary}</p>
+              )}
+              {results.rationale?.bullets?.length > 0 && (
+                <ul className="space-y-2">
+                  {results.rationale.bullets.map((bullet: string, i: number) => (
+                    <li key={i} className="text-sm text-foreground leading-relaxed flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
+                      <span dangerouslySetInnerHTML={{ __html: bullet.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') }} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!results.rationale?.summary && !results.rationale?.bullets?.length && (
+                <p className="text-sm text-muted-foreground">Analysis unavailable.</p>
+              )}
+              <div className="ai-attribution">Generated by Claude</div>
             </div>
           </section>
 
           <hr className="border-border" />
 
-          {/* Section C: Strategic Rationale */}
-          <section>
-            <h3 className="text-lg font-semibold text-foreground mb-4">C. Strategic Rationale</h3>
-            <AISection label="Strategic Rationale" content={results.rationale || "Analysis unavailable."} />
-          </section>
-
-          <hr className="border-border" />
-
-          {/* Section D: Synergies & Integration */}
+          {/* D. Synergies & Integration */}
           <section>
             <h3 className="text-lg font-semibold text-foreground mb-4">D. Synergies & Integration</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -252,9 +295,57 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
 
           <hr className="border-border" />
 
-          {/* Section E: Key Risk Flags */}
+          {/* E. Accretion / Dilution Analysis */}
+          {(results.accretionLow || results.accretionMid || results.accretionHigh) && (
+            <>
+              <section>
+                <h3 className="text-lg font-semibold text-foreground mb-1">E. Accretion / Dilution Analysis</h3>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Based on trailing EPS · no synergies assumed (conservative) ·{" "}
+                  {dealStructure === "all-cash"
+                    ? "5.5% cost of debt, 25% tax rate"
+                    : dealStructure === "all-stock"
+                    ? "new shares issued at current acquirer price"
+                    : "50/50 cash/stock — cash at 5.5% cost of debt, 25% tax rate"}
+                </p>
+                <div className="data-table">
+                  <table className="w-full">
+                    <thead>
+                      <tr>
+                        <th>Scenario</th>
+                        <th className="text-right">Acquirer Standalone EPS</th>
+                        <th className="text-right">Pro Forma EPS</th>
+                        <th className="text-right">Accretion / (Dilution)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {([
+                        ["Low (+15%)",  results.accretionLow],
+                        ["Mid (+25%)",  results.accretionMid],
+                        ["High (+40%)", results.accretionHigh],
+                      ] as [string, any][]).map(([label, acc]) =>
+                        acc ? (
+                          <tr key={label}>
+                            <td className="font-medium text-foreground">{label}</td>
+                            <td className="num">${acc.standaloneEPS}</td>
+                            <td className="num">${acc.proFormaEPS}</td>
+                            <td className={`num font-bold ${acc.isAccretive ? "text-success" : "text-destructive"}`}>
+                              {acc.accretionPct}
+                            </td>
+                          </tr>
+                        ) : null
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              <hr className="border-border" />
+            </>
+          )}
+
+          {/* F. Key Risk Flags */}
           <section>
-            <h3 className="text-lg font-semibold text-foreground mb-4">E. Key Risk Flags</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">F. Key Risk Flags</h3>
             <AISection label="Risk Flags">
               <ul className="space-y-3">
                 {(results.riskFlags || []).map((flag: string, i: number) => (
@@ -267,9 +358,8 @@ const DealSimulator = ({ viewMode, prefill, onClearPrefill }: DealSimulatorProps
             </AISection>
           </section>
 
-          {/* Attribution */}
           <p className="text-xs text-muted-foreground pt-4">
-            Financial data sourced from Financial Modeling Prep. Discount rates and industry risk premiums sourced from Damodaran Online (NYU Stern). AI analysis generated by Claude.
+            Financial data sourced from Yahoo Finance. Discount rates and industry risk premiums sourced from Damodaran Online (NYU Stern). AI analysis generated by Claude.
           </p>
         </div>
       )}
