@@ -308,7 +308,7 @@ app.post("/api/comps-engine", async (req, res) => {
       peerTickers = (recs?.recommendedSymbols || [])
         .map(r => r.symbol)
         .filter(s => s && s !== t)
-        .slice(0, 8);
+        .slice(0, 10);
     } catch (e) {
       console.error("recommendationsBySymbol failed:", e.message);
     }
@@ -318,7 +318,7 @@ app.post("/api/comps-engine", async (req, res) => {
       console.log("Yahoo recs insufficient, falling back to Claude for ticker selection");
       const claudeTickers = await callClaude(
         "You are an equity research analyst. Return only valid JSON, no markdown.",
-        `List EXACTLY 8 real publicly traded US-listed comparable companies for ${targetData.name} (${targetData.ticker}, ${targetData.sector}). Return ONLY: {"tickers":["T1","T2","T3","T4","T5","T6","T7","T8"]}. No other text.`
+        `List EXACTLY 10 real publicly traded US-listed comparable companies for ${targetData.name} (${targetData.ticker}, ${targetData.sector}). Return ONLY: {"tickers":["T1","T2","T3","T4","T5","T6","T7","T8","T9","T10"]}. No other text.`
       );
       try {
         const parsed = JSON.parse(claudeTickers.replace(/```json|```/g, "").trim());
@@ -330,38 +330,32 @@ app.post("/api/comps-engine", async (req, res) => {
       return res.status(500).json({ error: "No comparable companies found for this ticker." });
     }
 
-    // Fetch peer data, skip failures
-    const settled = await Promise.allSettled(peerTickers.map(s => getCompanyData(s)));
-    const targetSector = (targetData.sector || "").toLowerCase();
+    // Fetch peer data, skip failures — request more candidates so filtering leaves enough
+    const extraTickers = peerTickers.slice(0, 10);
+    const settled = await Promise.allSettled(extraTickers.map(s => getCompanyData(s)));
     const targetMktCap = targetData.rawMktCap || 0;
 
     const peerData = settled
       .filter(r => r.status === "fulfilled")
       .map(r => r.value)
       .filter(p => {
-        // Must be a real company with meaningful size (> $100M market cap)
-        if (!p.rawMktCap || p.rawMktCap < 1e8) {
+        // Must be a real company with meaningful size (> $50M market cap)
+        if (!p.rawMktCap || p.rawMktCap < 5e7) {
           console.log(`Filtered peer (too small): ${p.name} (${p.ticker}) mktCap=${fmtMoney(p.rawMktCap)}`);
           return false;
         }
-        // Market cap should be within 1/20x – 20x of target (sanity check for relevance)
+        // Market cap within 1/50x – 50x of target (wide range, just catches completely wrong companies)
         if (targetMktCap > 0) {
           const ratio = p.rawMktCap / targetMktCap;
-          if (ratio < 0.05 || ratio > 20) {
+          if (ratio < 0.02 || ratio > 50) {
             console.log(`Filtered peer (market cap mismatch): ${p.name} (${p.ticker}) ratio=${ratio.toFixed(2)}x`);
             return false;
           }
         }
-        // Revenue growth sanity: >±300% almost always means bad data (spin-off, restatement, wrong ticker)
+        // Revenue growth sanity: >±500% almost always means bad data
         const rg = parseFloat(p.revenueGrowth);
-        if (!isNaN(rg) && Math.abs(rg) > 300) {
+        if (!isNaN(rg) && Math.abs(rg) > 500) {
           console.log(`Filtered peer (extreme rev growth): ${p.name} (${p.ticker}) revGrowth=${p.revenueGrowth}`);
-          return false;
-        }
-        // Sector must broadly match if both companies have sector data
-        const peerSector = (p.sector || "").toLowerCase();
-        if (targetSector && peerSector && peerSector !== targetSector) {
-          console.log(`Filtered peer (sector mismatch): ${p.name} (${p.ticker}) sector="${p.sector}" vs target="${targetData.sector}"`);
           return false;
         }
         return true;
