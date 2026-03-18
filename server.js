@@ -6,6 +6,7 @@ const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { existsSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -411,12 +412,11 @@ app.post("/api/comps-engine", async (req, res) => {
 });
 
 // In production, serve the Vite build from the same server
-import { existsSync } from "fs";
 const distPath = join(__dirname, "dist");
 if (existsSync(distPath)) {
   app.use(express.static(distPath));
   // Catch-all: return index.html for any non-API route (React Router)
-  app.get("*", (_req, res) => {
+  app.get("/{*splat}", (_req, res) => {
     res.sendFile(join(distPath, "index.html"));
   });
 }
