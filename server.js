@@ -389,15 +389,25 @@ app.post("/api/comps-engine", async (req, res) => {
       return res.status(500).json({ error: "Could not fetch data for comparable companies." });
     }
 
+    // Industry names must match damodaran.json exactly (Jan 2026 data)
     const damodaranIndustries = [
-      "Software (System & Application)","Software (Internet)","Healthcare Products",
-      "Pharmaceuticals","Biotechnology","Banks (Regional)","Banks (Money Center)",
-      "Financial Services (Non-bank & Insurance)","Insurance (General)","Retail (General)",
-      "Retail (Online)","Oil/Gas (Production & Exploration)","Oil/Gas (Integrated)",
-      "Semiconductor","Semiconductor Equipment","Telecom (Wireless)","Entertainment",
-      "Media","Aerospace/Defense","Auto & Truck","Chemical (Specialty)",
-      "Electrical Equipment","Food Processing","Hospitality/Hotel",
-      "Real Estate (General/Diversified)","Transportation","Utility (General)"
+      "Software (System & Application)","Software (Internet)","Software (Entertainment)",
+      "Healthcare Products","Healthcare Support Services",
+      "Drugs (Pharmaceutical)","Drugs (Biotechnology)",
+      "Banks (Regional)","Bank (Money Center)",
+      "Financial Svcs. (Non-bank & Insur)","Insurance (General)","Insurance (Life)","Insurance (Prop/Cas.)",
+      "Retail (General)","Retail (Special Lines)","Retail (Grocery and Food)",
+      "Oil/Gas (Production and Exploratio)","Oil/Gas (Integrated)",
+      "Semiconductor","Semiconductor Equip",
+      "Telecom (Wireless)","Telecom. Services",
+      "Entertainment","Broadcasting",
+      "Aerospace/Defense","Auto & Truck","Auto Parts",
+      "Chemical (Specialty)","Electrical Equipment","Food Processing",
+      "Hotel/Gaming","Real Estate (General/Diversified)",
+      "Transportation","Transportation (Railroads)",
+      "Utility (General)","Utility (Water)",
+      "Computer Services","Computers/Peripherals",
+      "Machinery","Metals & Mining","Green & Renewable Energy","Restaurant/Dining"
     ];
 
     // Always use Claude for industry classification — it knows the company and avoids

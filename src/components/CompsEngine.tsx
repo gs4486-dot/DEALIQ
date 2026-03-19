@@ -126,7 +126,10 @@ const CompsEngine = () => {
   const targetRawEv     = (results?.target as any)?.rawEv     || 0;
   const targetRawMktCap = (results?.target as any)?.rawMktCap || 0;
   const netDebt         = targetRawEv - targetRawMktCap;
-  const deRatio         = targetRawMktCap > 0 && netDebt > 0 ? netDebt / targetRawMktCap : 0;
+  // Cap D/E at 200% — companies with financial-services arms (auto, banks) have inflated
+  // EV from loan-book debt that isn't true operating leverage; uncapped it distorts beta badly.
+  const rawDeRatio      = targetRawMktCap > 0 && netDebt > 0 ? netDebt / targetRawMktCap : 0;
+  const deRatio         = Math.min(rawDeRatio, 2.0);
   const TAX_RATE        = 0.25;
   const releveredBeta   = damodaranRow.beta * (1 + (1 - TAX_RATE) * deRatio);
   const RF              = damodaranData.riskFreeRate ?? 4.5;
@@ -379,7 +382,7 @@ const CompsEngine = () => {
               >
                 Damodaran Online, NYU Stern School of Business
               </a>
-              {" "}· ERP as of Jan 2024 · β relevered using target D/E at 25% tax rate
+              {" "}· ERP as of Jan 2026 · β relevered using target D/E at 25% tax rate (capped at 200%)
             </p>
           </section>
         </div>
