@@ -9,7 +9,6 @@ const tabs: { id: TabId; label: string }[] = [
   { id: "simulator", label: "M&A Simulator" },
   { id: "tracker",   label: "Deal Tracker"  },
   { id: "comps",     label: "Comps Engine"  },
-  { id: "lbo",       label: "LBO Simulator" },
 ];
 
 const Navigation = ({ activeTab, onTabChange }: NavigationProps) => {

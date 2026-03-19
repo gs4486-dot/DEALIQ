@@ -1,4 +1,4 @@
-import { BarChart3, Target, Search, TrendingUp, Zap, BrainCircuit, Database } from "lucide-react";
+import { BarChart3, Target, Search, Zap, BrainCircuit, Database } from "lucide-react";
 import type { TabId } from "@/pages/Index";
 
 interface LandingPageProps {
@@ -26,13 +26,6 @@ const tools = [
     description: "Enter a ticker and get an AI-selected peer set with live EV/EBITDA, EV/Revenue, and margin multiples, ready for a comp table.",
     icon: Search,
     cta: "Run Comps",
-  },
-  {
-    id: "lbo" as TabId,
-    title: "LBO Simulator",
-    description: "Model a leveraged buyout with custom entry multiple, leverage, and growth assumptions. Get IRR and cash-on-cash returns across bear, base, and bull scenarios.",
-    icon: TrendingUp,
-    cta: "Model an LBO",
   },
 ];
 
@@ -114,7 +107,7 @@ const LandingPage = ({ onNavigate }: LandingPageProps) => {
 
       {/* Tool Cards */}
       <div className="flex-1 flex flex-col items-center px-6 -mt-12 relative z-10">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 max-w-4xl w-full">
           {tools.map((tool) => (
             <div
               key={tool.id}
