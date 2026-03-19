@@ -42,15 +42,17 @@ async function getCompanyData(ticker) {
   const finData  = summary.financialData || {};
   const profile  = summary.summaryProfile || {};
 
-  const mktCap       = quote.marketCap || 0;
-  const ev           = keyStats.enterpriseValue || 0;
-  const evEbitda     = keyStats.enterpriseToEbitda;
-  const evRevenue    = keyStats.enterpriseToRevenue;
-  const revGrowth    = finData.revenueGrowth;
-  const ebitdaMargin = finData.ebitdaMargins;
-  const totalRevenue = finData.totalRevenue || 0;
-  const ebitdaAbs    = finData.ebitda || 0;
-  const trailingEps  = keyStats.trailingEps != null ? Number(keyStats.trailingEps) : null;
+  const mktCap        = quote.marketCap || 0;
+  const ev            = keyStats.enterpriseValue || 0;
+  const evEbitda      = keyStats.enterpriseToEbitda;
+  const evRevenue     = keyStats.enterpriseToRevenue;
+  const revGrowth     = finData.revenueGrowth;
+  const ebitdaMargin  = finData.ebitdaMargins;
+  const totalRevenue  = finData.totalRevenue || 0;
+  const ebitdaAbs     = finData.ebitda || 0;
+  const trailingEps   = keyStats.trailingEps != null ? Number(keyStats.trailingEps) : null;
+  // Yahoo Finance returns debtToEquity as a percentage (e.g. 34 = 34% D/E = 0.34 ratio)
+  const debtToEquity  = finData.debtToEquity != null ? Number(finData.debtToEquity) / 100 : null;
 
   const sharesOutstanding = keyStats.sharesOutstanding || 0;
   const currentPrice      = quote.regularMarketPrice || 0;
@@ -84,6 +86,7 @@ async function getCompanyData(ticker) {
     sharesOutstanding,
     currentPrice,
     trailingEps,
+    rawDeRatio: debtToEquity,   // Yahoo Finance balance-sheet D/E (total debt / total equity)
     sector:   profile.sector   || "",
     industry: profile.industry || "",
   };

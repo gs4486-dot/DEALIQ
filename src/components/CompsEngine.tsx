@@ -123,12 +123,14 @@ const CompsEngine = () => {
   ) || damodaranData.industries[0];
 
   // Relevered beta: β_levered = β_unlevered × (1 + (1−t) × D/E)
+  // Prefer Yahoo Finance balance-sheet D/E (total debt / total equity) — avoids distortion
+  // from financial-services arm debt (auto, banks). Cap at 200% as safety valve.
+  const yahooDeRatio    = (results?.target as any)?.rawDeRatio;
   const targetRawEv     = (results?.target as any)?.rawEv     || 0;
   const targetRawMktCap = (results?.target as any)?.rawMktCap || 0;
-  const netDebt         = targetRawEv - targetRawMktCap;
-  // Cap D/E at 200% — companies with financial-services arms (auto, banks) have inflated
-  // EV from loan-book debt that isn't true operating leverage; uncapped it distorts beta badly.
-  const rawDeRatio      = targetRawMktCap > 0 && netDebt > 0 ? netDebt / targetRawMktCap : 0;
+  const evDeRatio       = targetRawMktCap > 0 && targetRawEv > targetRawMktCap
+    ? (targetRawEv - targetRawMktCap) / targetRawMktCap : 0;
+  const rawDeRatio      = yahooDeRatio != null ? yahooDeRatio : evDeRatio;
   const deRatio         = Math.min(rawDeRatio, 2.0);
   const TAX_RATE        = 0.25;
   const releveredBeta   = damodaranRow.beta * (1 + (1 - TAX_RATE) * deRatio);
@@ -353,6 +355,7 @@ const CompsEngine = () => {
                       Relevered Beta (Est.)
                       <span className="text-[11px] text-muted-foreground ml-1.5 font-normal">
                         D/E {deRatio > 0 ? `${(deRatio * 100).toFixed(0)}%` : "0% (net cash)"}
+                        {rawDeRatio > 2.0 && <span className="text-amber-600 ml-1">(capped)</span>}
                       </span>
                     </td>
                     <td className="num">{releveredBeta.toFixed(2)}</td>
