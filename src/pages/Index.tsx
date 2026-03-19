@@ -4,8 +4,9 @@ import LandingPage from "@/components/LandingPage";
 import DealSimulator from "@/components/DealSimulator";
 import DealTracker from "@/components/DealTracker";
 import CompsEngine from "@/components/CompsEngine";
+import LBOSimulator from "@/components/LBOSimulator";
 
-export type TabId = "landing" | "simulator" | "tracker" | "comps";
+export type TabId = "landing" | "simulator" | "tracker" | "comps" | "lbo";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState<TabId>("landing");
@@ -28,6 +29,7 @@ const Index = () => {
       {activeTab === "simulator" && <DealSimulator prefill={simulatorPrefill} onClearPrefill={() => setSimulatorPrefill(null)} />}
       {activeTab === "tracker"   && <DealTracker onSimulateDeal={handleSimulateDeal} />}
       {activeTab === "comps"     && <CompsEngine />}
+      {activeTab === "lbo"       && <LBOSimulator />}
     </div>
   );
 };

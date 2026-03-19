@@ -246,9 +246,9 @@ const LBOSimulator = () => {
           <section>
             <h3 className="text-lg font-semibold text-foreground mb-1">C. Return Scenarios</h3>
             <p className="text-xs text-muted-foreground mb-4">
-              Bear: 0.5x growth, exit {results.assumptions?.exitMult - 2}x &nbsp;·&nbsp;
-              Base: 1x growth, exit {results.assumptions?.exitMult}x &nbsp;·&nbsp;
-              Bull: 1.5x growth, exit {results.assumptions?.exitMult + 2}x
+              Bear: 0.5x growth, exit {(results.assumptions?.exitMult ?? exitMultiple) - 2}x &nbsp;·&nbsp;
+              Base: 1x growth, exit {results.assumptions?.exitMult ?? exitMultiple}x &nbsp;·&nbsp;
+              Bull: 1.5x growth, exit {(results.assumptions?.exitMult ?? exitMultiple) + 2}x
             </p>
             <div className="data-table">
               <table className="w-full">

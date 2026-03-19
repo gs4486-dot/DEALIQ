@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, ArrowRight } from "lucide-react";
+import { Search, ArrowRight, BarChart3 } from "lucide-react";
 
 interface DealMetrics {
   premiumPaid?: string;
@@ -256,7 +256,7 @@ const statusStyle: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-700",
 };
 
-const DealTracker = (_props: DealTrackerProps) => {
+const DealTracker = ({ onSimulateDeal }: DealTrackerProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [sectorFilter, setSectorFilter] = useState("All Sectors");
   const [typeFilter, setTypeFilter] = useState("All Types");
@@ -337,7 +337,18 @@ const DealTracker = (_props: DealTrackerProps) => {
                     <span className="text-xs text-muted-foreground">{deal.date}</span>
                   </div>
                 </div>
-                <span className="text-xl font-bold text-primary tabular-nums shrink-0">{deal.value}</span>
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <span className="text-xl font-bold text-primary tabular-nums">{deal.value}</span>
+                  {onSimulateDeal && deal.acquirer && deal.target && (
+                    <button
+                      onClick={() => onSimulateDeal(deal.acquirer, deal.target)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-primary border border-primary/30 rounded-lg hover:bg-accent-bg transition-colors"
+                    >
+                      <BarChart3 className="w-3 h-3" />
+                      Simulate
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Metrics grid (only fields with values) */}
