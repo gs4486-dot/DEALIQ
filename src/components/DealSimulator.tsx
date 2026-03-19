@@ -7,6 +7,44 @@ import TickerSearchInput from "@/components/TickerSearchInput";
 import FootballFieldChart, { parseToB, formatB, type FFRow } from "@/components/FootballFieldChart";
 import { toast } from "sonner";
 
+const GRADE_CONFIG: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  "A+": { bg: "bg-emerald-50",  text: "text-emerald-700", border: "border-emerald-200", label: "Exceptional" },
+  "A":  { bg: "bg-emerald-50",  text: "text-emerald-700", border: "border-emerald-200", label: "Excellent" },
+  "A-": { bg: "bg-emerald-50",  text: "text-emerald-600", border: "border-emerald-200", label: "Strong" },
+  "B+": { bg: "bg-blue-50",     text: "text-blue-700",    border: "border-blue-200",    label: "Solid" },
+  "B":  { bg: "bg-blue-50",     text: "text-blue-700",    border: "border-blue-200",    label: "Good" },
+  "B-": { bg: "bg-blue-50",     text: "text-blue-600",    border: "border-blue-200",    label: "Above Average" },
+  "C+": { bg: "bg-amber-50",    text: "text-amber-700",   border: "border-amber-200",   label: "Average" },
+  "C":  { bg: "bg-amber-50",    text: "text-amber-700",   border: "border-amber-200",   label: "Mixed" },
+  "C-": { bg: "bg-amber-50",    text: "text-amber-600",   border: "border-amber-200",   label: "Weak" },
+  "D+": { bg: "bg-orange-50",   text: "text-orange-700",  border: "border-orange-200",  label: "Poor" },
+  "D":  { bg: "bg-orange-50",   text: "text-orange-700",  border: "border-orange-200",  label: "Poor" },
+  "D-": { bg: "bg-orange-50",   text: "text-orange-600",  border: "border-orange-200",  label: "Very Poor" },
+  "F":  { bg: "bg-red-50",      text: "text-red-700",     border: "border-red-200",     label: "Failing" },
+};
+
+const DealGradeCard = ({ grade, verdict }: { grade: string; verdict: string | null }) => {
+  const cfg = GRADE_CONFIG[grade] ?? GRADE_CONFIG["C"];
+  return (
+    <div className={`rounded-xl border ${cfg.border} ${cfg.bg} p-6 flex items-start gap-6`}>
+      <div className={`shrink-0 w-20 h-20 rounded-2xl flex flex-col items-center justify-center border-2 ${cfg.border} bg-white shadow-sm`}>
+        <span className={`text-3xl font-extrabold leading-none ${cfg.text}`}>{grade}</span>
+      </div>
+      <div className="flex flex-col justify-center min-h-[80px]">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Deal Grade</span>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.text} border ${cfg.border}`}>
+            {cfg.label}
+          </span>
+        </div>
+        {verdict && (
+          <p className="text-sm text-foreground leading-relaxed max-w-xl">{verdict}</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
 interface DealSimulatorProps {
   prefill: { acquirer: string; target: string } | null;
   onClearPrefill: () => void;
@@ -133,6 +171,11 @@ const DealSimulator = ({ prefill, onClearPrefill }: DealSimulatorProps) => {
       {/* Results */}
       {results && !isAnalyzing && (
         <div className="space-y-10">
+
+          {/* Deal Grade Card */}
+          {results.dealGrade?.grade && (
+            <DealGradeCard grade={results.dealGrade.grade} verdict={results.dealGrade.verdict} />
+          )}
 
           {/* A. Deal Overview */}
           <section>

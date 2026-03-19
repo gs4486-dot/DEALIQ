@@ -229,18 +229,21 @@ Target: ${targetData.name} (${targetData.ticker})
 
 Deal Structure: ${dealStructure}`;
 
-    const systemPrompt = `You are a Senior M&A Analyst at a bulge bracket bank. Write in precise, data-driven pitch book style. Reference the actual numbers provided. Be specific and avoid generic language.`;
+    const systemPrompt = `You are a Senior M&A Analyst at a bulge bracket bank. Be intellectually honest: only cite numbers that are explicitly provided in the data. Never invent synergy dollar estimates, forward revenue projections, or cost savings figures that are not derivable from the given metrics. When a synergy or risk is real but unquantifiable from available data, describe the mechanism clearly without attaching a made-up number. Write in concise pitch book style.`;
 
-    const rationalePrompt = `Analyze the M&A rationale for ${acquirerData.name} acquiring ${targetData.name}. Return ONLY this JSON (no markdown, no other text): {"summary": "One punchy sentence with the core thesis, referencing specific numbers.", "bullets": ["**Strategic fit**: one sentence with specific detail.", "**Financial logic**: one sentence referencing actual metrics.", "**Value creation**: one sentence on synergies or market positioning."]}\n\n${metrics}`;
+    const rationalePrompt = `Analyze the M&A rationale for ${acquirerData.name} acquiring ${targetData.name}. Use only the financial data provided — do not invent numbers. Return ONLY this JSON (no markdown, no other text): {"summary": "One punchy sentence with the core strategic thesis, referencing actual provided metrics where relevant.", "bullets": ["**Strategic fit**: one sentence on the business logic and market positioning.", "**Financial profile**: one sentence referencing actual provided metrics (multiples, margins, growth) to characterize the deal economics.", "**Value creation path**: one sentence on where value could come from — be specific about the mechanism, but do not invent dollar estimates."]}\n\n${metrics}`;
 
-    const synergiesPrompt = `Based on these metrics, provide exactly 3 revenue or cost synergies with realistic dollar magnitudes anchored to the actual LTM Revenue and EBITDA figures provided, and exactly 3 integration execution risks. Return ONLY this JSON: {"synergies": ["...", "...", "..."], "risks": ["...", "...", "..."]}. No other text.\n\n${metrics}`;
+    const synergiesPrompt = `Identify exactly 3 potential synergies and exactly 3 integration execution risks for ${acquirerData.name} acquiring ${targetData.name}. IMPORTANT: Do NOT invent specific dollar synergy estimates or percentages — we do not have the internal cost structure data to support them. Instead, describe each synergy by its mechanism and strategic logic (e.g. "Cross-sell of X into Y's customer base given overlapping enterprise relationships" or "Consolidation of overlapping G&A functions"). For risks, be specific about what makes this deal hard to execute based on the actual data provided. Return ONLY this JSON: {"synergies": ["...", "...", "..."], "risks": ["...", "...", "..."]}. No other text.\n\n${metrics}`;
 
-    const riskFlagsPrompt = `Identify exactly 3 strategic, regulatory, or integration red flags in this transaction. Return ONLY this JSON: {"flags": ["...", "...", "..."]}. No other text.\n\n${metrics}`;
+    const riskFlagsPrompt = `Identify exactly 3 material risk flags for this transaction — regulatory, strategic, financial, or integration. Ground each flag in the actual data provided (e.g. valuation multiples, margin profile, sector dynamics, deal structure). Do not invent numbers. Be specific about why the risk matters in this deal, not generic M&A boilerplate. Return ONLY this JSON: {"flags": ["...", "...", "..."]}. No other text.\n\n${metrics}`;
 
-    const [rationaleText, synergiesText, riskFlagsText] = await Promise.all([
+    const gradePrompt = `Grade this M&A transaction from A+ (exceptional deal, clear value creation) to F (value-destroying, no strategic logic). Use the full scale: A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D-, F. Base your grade on: (1) strategic fit and value creation logic, (2) financial attractiveness using the actual provided multiples, margin, and growth data, (3) execution risk given the deal structure and sector. Do not invent synergy estimates. Return ONLY this JSON (no markdown, no other text): {"grade": "B+", "verdict": "1-2 sentences. Be direct. Reference the actual data provided. Write like a senior banker giving a client a straight answer."}\n\n${metrics}`;
+
+    const [rationaleText, synergiesText, riskFlagsText, gradeText] = await Promise.all([
       callClaude(systemPrompt, rationalePrompt),
       callClaude(systemPrompt, synergiesPrompt),
       callClaude(systemPrompt, riskFlagsPrompt),
+      callClaude(systemPrompt, gradePrompt),
     ]);
 
     let synergiesData = { synergies: [], risks: [] };
@@ -261,6 +264,7 @@ Deal Structure: ${dealStructure}`;
 
     synergiesData = parseJSON(synergiesText, { synergies: [], risks: [] });
     riskFlagsData = parseJSON(riskFlagsText, { flags: [] });
+    const gradeData = parseJSON(gradeText, { grade: null, verdict: null });
 
     // Parse rationale — if JSON parse fails, try to extract summary/bullets with regex
     let rationaleData = parseJSON(rationaleText, null);
@@ -295,6 +299,7 @@ Deal Structure: ${dealStructure}`;
     res.json({
       acquirerData,
       targetData,
+      dealGrade:        gradeData,
       rationale:        rationaleData,
       synergies:        synergiesData.synergies || [],
       integrationRisks: synergiesData.risks || [],
